@@ -5,6 +5,16 @@ right in your browser. Works for Daggerheart, D&D, Pathfinder or any other game 
 
 Your images never leave your computer: everything runs locally in the browser.
 
+## Screenshots
+
+Line up every figure on a battle map grid and match their sizes by eye:
+
+![Lineup view: five figures standing side by side on a one-inch grid, compared against the Small to Gargantuan reference silhouettes](docs/screenshots/lineup.png)
+
+| Editor — crop, name and scale one figure | Print — layout, options and live preview |
+| --- | --- |
+| ![Editor view with the crop tool, name and colour fields, and a size slider next to the reference silhouettes](docs/screenshots/editor.png) | ![Print view with paper and layout settings beside a preview of the printable sheet](docs/screenshots/print.png) |
+
 ## How a paper mini works
 
 Each mini is printed as one strip that you cut out and fold at the top:
