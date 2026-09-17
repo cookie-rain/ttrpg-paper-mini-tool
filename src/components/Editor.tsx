@@ -5,7 +5,7 @@ import { cardSize, effectiveDpi, figureImageSize, maxFigureHeightMm } from '../l
 import { indexToLetters } from '../lib/labels';
 import { formatInGame, formatLength } from '../lib/units';
 import { ConfirmButton, Field, InGameInput, LengthInput, NumberInput } from './controls';
-import { CropTool } from './CropTool';
+import { ImageEditor } from './ImageEditor';
 import { FigureImage } from './FigureImage';
 import { SizeLegend } from './SizeLegend';
 import { Stage, type StageItem } from './Stage';
@@ -31,9 +31,9 @@ export function Editor() {
     );
   }
 
-  const image = images[figure.imageId];
+  const image = images[figure.frontImage.imageId];
   const update = (patch: Partial<Figure>) => updateFigure(figure.id, patch);
-  const maxHeight = maxFigureHeightMm(figure.crop, settings);
+  const maxHeight = maxFigureHeightMm(figure.frontImage.crop, settings);
   const size = figureImageSize(figure);
   const card = cardSize(figure, settings);
   const dpi = effectiveDpi(figure);
@@ -130,8 +130,7 @@ export function Editor() {
           </Field>
         </div>
 
-        <h3>Crop</h3>
-        {image && <CropTool figure={figure} image={image} onChange={(crop) => update({ crop })} />}
+        <ImageEditor key={figure.id} figure={figure} images={images} />
       </section>
 
       <section className="panel editor-size">

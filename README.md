@@ -36,6 +36,9 @@ No stands? Choose **Folded paper foot**: both base strips bend out 90° into a f
 
 - **Drag & drop** images anywhere into the window, or use *Add images*.
 - **Auto-trim**: transparent (or plain-coloured) borders are removed automatically; fine-tune with the crop tool.
+- **Optional back artwork**: use the editor's *Front* and *Back* tabs to crop or replace either side.
+  Add a back image and choose *Fit* (whole image with empty space), *Fill* (crop edges), or *Stretch* to match
+  the front image's printed dimensions. Remove it to return to the duplicated front image.
 - **Size by eye**: compare each figure with reference silhouettes (Small, Medium, Large, Huge, Gargantuan)
   and scale it with a slider. The aspect ratio is always kept.
 - **Lineup view**: see all figures side by side on a battle map grid and match their sizes;

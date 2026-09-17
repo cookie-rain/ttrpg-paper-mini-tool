@@ -11,6 +11,8 @@ export type BaseStyle = 'stand' | 'folded';
 export type PackingMode = 'rows' | 'compact';
 export type BaseColor = 'none' | 'blue' | 'red' | 'green' | 'yellow' | 'gray';
 export type SizeCategory = 'small' | 'medium' | 'large' | 'huge' | 'gargantuan';
+/** How back artwork fits the front image's printed dimensions. */
+export type ImageFit = 'contain' | 'cover' | 'stretch';
 
 /** Crop rectangle in source image pixels. */
 export interface CropRect {
@@ -28,15 +30,22 @@ export interface StoredImage {
   height: number;
 }
 
+/** An image reference and its crop, independent of the figure's printed size. */
+export interface FigureImage {
+  imageId: string;
+  crop: CropRect;
+}
+
 export interface Figure {
   id: string;
-  imageId: string;
+  frontImage: FigureImage;
+  /** Omitted to duplicate the front image on the back. */
+  backImage?: FigureImage & { fit: ImageFit };
   name: string;
   info: string;
   /** How many copies to print. Copies are labelled A, B, C, ... when count > 1. */
   count: number;
   color: BaseColor;
-  crop: CropRect;
   /** Printed height of the (cropped) image on one side of the fold. Width follows the aspect ratio. */
   heightMm: number;
 }

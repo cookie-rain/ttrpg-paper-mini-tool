@@ -57,8 +57,8 @@ export function Sidebar() {
                   <span className="thumb">
                     <FigureImage
                       figure={figure}
-                      image={images[figure.imageId]}
-                      heightPx={Math.min(44, (44 * figure.crop.height) / figure.crop.width)}
+                      image={images[figure.frontImage.imageId]}
+                      heightPx={Math.min(44, (44 * figure.frontImage.crop.height) / figure.frontImage.crop.width)}
                     />
                   </span>
                   <span className="figure-list-text">

@@ -1,9 +1,34 @@
-import type { Figure, Settings } from '../types';
+import type { CropRect, Figure, ImageFit, Settings } from '../types';
 import { MIN_FIGURE_HEIGHT_MM, MM_PER_INCH, PAPER_SIZES_MM } from './constants';
 
+/** Source crop and centred destination for artwork fitted into a fixed-size box. */
+export function fitImage(
+  crop: CropRect,
+  width: number,
+  height: number,
+  fit: ImageFit,
+): { source: CropRect; destination: CropRect } {
+  const source = { ...crop };
+  const destination = { x: 0, y: 0, width, height };
+  if (fit === 'contain') {
+    const scale = Math.min(width / crop.width, height / crop.height);
+    destination.width = crop.width * scale;
+    destination.height = crop.height * scale;
+    destination.x = (width - destination.width) / 2;
+    destination.y = (height - destination.height) / 2;
+  } else if (fit === 'cover') {
+    const scale = Math.max(width / crop.width, height / crop.height);
+    source.width = width / scale;
+    source.height = height / scale;
+    source.x += (crop.width - source.width) / 2;
+    source.y += (crop.height - source.height) / 2;
+  }
+  return { source, destination };
+}
+
 /** Printed image size of a figure (one side of the fold). */
-export function figureImageSize(figure: Pick<Figure, 'crop' | 'heightMm'>): { width: number; height: number } {
-  const aspect = figure.crop.width / figure.crop.height;
+export function figureImageSize(figure: Pick<Figure, 'frontImage' | 'heightMm'>): { width: number; height: number } {
+  const aspect = figure.frontImage.crop.width / figure.frontImage.crop.height;
   return { width: figure.heightMm * aspect, height: figure.heightMm };
 }
 
@@ -26,7 +51,7 @@ export function flapHeightMm(settings: Settings): number {
  *   |  flap     |  reinforcement flap (folded base only, 2 × base strip)
  *   +-----------+
  */
-export function cardSize(figure: Pick<Figure, 'crop' | 'heightMm'>, settings: Settings): { width: number; height: number } {
+export function cardSize(figure: Pick<Figure, 'frontImage' | 'heightMm'>, settings: Settings): { width: number; height: number } {
   const image = figureImageSize(figure);
   return {
     width: Math.max(image.width, settings.minWidthMm),
@@ -55,7 +80,7 @@ export function footerReserveMm(settings: Settings): number {
  * Largest image height that still fits on a single sheet, either upright or rotated by 90°.
  * The card width is max(imageWidth, minWidth), so both constraints are checked separately.
  */
-export function maxFigureHeightMm(crop: Figure['crop'], settings: Settings): number {
+export function maxFigureHeightMm(crop: Figure['frontImage']['crop'], settings: Settings): number {
   const area = printableArea(settings);
   const aspect = crop.width / crop.height;
   const fit = (availWidth: number, availHeight: number) => {
@@ -69,6 +94,6 @@ export function maxFigureHeightMm(crop: Figure['crop'], settings: Settings): num
 }
 
 /** Effective print resolution of the cropped image at its printed size. */
-export function effectiveDpi(figure: Pick<Figure, 'crop' | 'heightMm'>): number {
-  return figure.crop.height / (figure.heightMm / MM_PER_INCH);
+export function effectiveDpi(figure: Pick<Figure, 'frontImage' | 'heightMm'>): number {
+  return figure.frontImage.crop.height / (figure.heightMm / MM_PER_INCH);
 }

@@ -1,7 +1,7 @@
 import type { Figure, Settings, StoredImage } from '../types';
 import { BASE_COLORS, MM_PER_INCH, PAPER_SIZES_MM } from './constants';
 import { readableTextColor } from './colors';
-import { figureImageSize, flapHeightMm } from './geometry';
+import { figureImageSize, fitImage, flapHeightMm } from './geometry';
 import { loadImageElement } from './image';
 import type { PageLayout, PlacedCard } from './layout';
 
@@ -25,13 +25,20 @@ export const BRAND = 'TTRPG Paper-Mini Tool';
 
 export type DecodedImages = Map<string, HTMLImageElement>;
 
-/** Decodes every image used by the given figures, keyed by figure id. */
+/** Decodes every image used by the given figures, keyed by image id. */
 export async function decodeFigureImages(figures: Figure[], images: Record<string, StoredImage>): Promise<DecodedImages> {
   const result: DecodedImages = new Map();
+  const ids = new Set(
+    figures.flatMap((f) =>
+      f.backImage
+        ? [f.frontImage.imageId, f.backImage.imageId]
+        : [f.frontImage.imageId],
+    ),
+  );
   await Promise.all(
-    figures.map(async (figure) => {
-      const stored = images[figure.imageId];
-      if (stored) result.set(figure.id, await loadImageElement(stored.dataUrl));
+    [...ids].map(async (id) => {
+      const stored = images[id];
+      if (stored) result.set(id, await loadImageElement(stored.dataUrl));
     }),
   );
   return result;
@@ -79,7 +86,7 @@ export function renderPage(
     } else {
       ctx.translate(card.x, card.y);
     }
-    drawCard(ctx, card, figure, decoded.get(figure.id), settings, pxPerMm);
+    drawCard(ctx, card, figure, decoded, settings, pxPerMm);
     ctx.restore();
   }
 
@@ -91,14 +98,14 @@ export function renderPage(
 
 /**
  * Draws one unfolded card in its local coordinate system (mm, origin top-left).
- * The back image is mirrored vertically so both halves line up exactly after folding;
- * the back text is rotated 180° so it reads correctly from behind.
+ * Duplicated artwork is mirrored vertically so both halves line up after folding.
+ * Custom back artwork and back text rotate 180° so they read correctly from behind.
  */
 function drawCard(
   ctx: CanvasRenderingContext2D,
   card: PlacedCard,
   figure: Figure,
-  img: HTMLImageElement | undefined,
+  decoded: DecodedImages,
   settings: Settings,
   pxPerMm: number,
 ): void {
@@ -110,15 +117,32 @@ function drawCard(
   const flapY = frontBaseY + base;
   const flap = flapHeightMm(settings);
   const imageX = (cardWidth - image.width) / 2;
+  const img = decoded.get(figure.frontImage.imageId);
+  const back = figure.backImage;
+  const backImg = back ? decoded.get(back.imageId) : undefined;
 
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, cardWidth, cardHeight);
 
   if (img) {
-    const { x, y, width, height } = figure.crop;
+    const { x, y, width, height } = figure.frontImage.crop;
     // Front half, standing on the front base strip.
     ctx.drawImage(img, x, y, width, height, imageX, foldY, image.width, image.height);
-    // Back half, mirrored across the fold line.
+  }
+
+  if (back && backImg) {
+    const { source, destination } = fitImage(back.crop, image.width, image.height, back.fit);
+    ctx.save();
+    ctx.translate(imageX + image.width, foldY);
+    ctx.rotate(Math.PI);
+    ctx.drawImage(
+      backImg, source.x, source.y, source.width, source.height,
+      destination.x, destination.y, destination.width, destination.height,
+    );
+    ctx.restore();
+  } else if (img) {
+    // Without custom artwork, preserve the mirrored front image.
+    const { x, y, width, height } = figure.frontImage.crop;
     ctx.save();
     ctx.translate(0, foldY);
     ctx.scale(1, -1);

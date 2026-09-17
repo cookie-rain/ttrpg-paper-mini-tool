@@ -13,7 +13,7 @@ export function FigureImage({
   heightPx: number;
   style?: CSSProperties;
 }) {
-  const { crop } = figure;
+  const { crop } = figure.frontImage;
   const scale = heightPx / crop.height;
   return (
     <div

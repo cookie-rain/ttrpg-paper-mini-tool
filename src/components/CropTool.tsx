@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState, type ChangeEvent } from 'react';
 import ReactCrop, { type PercentCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
-import type { CropRect, Figure, StoredImage } from '../types';
+import type { CropRect, StoredImage } from '../types';
 import { findContentBounds, loadImageElement } from '../lib/image';
 
 const MIN_CROP_PX = 4;
@@ -28,17 +28,40 @@ function toPixels(crop: PercentCrop, image: StoredImage): CropRect {
 }
 
 export function CropTool({
-  figure,
+  crop: savedCrop,
   image,
   onChange,
+  onReplace,
 }: {
-  figure: Figure;
+  crop: CropRect;
   image: StoredImage;
   onChange: (crop: CropRect) => void;
+  onReplace: (file: File) => Promise<void>;
 }) {
   // Local state while dragging; the figure is only updated when the drag ends to avoid re-rendering everything.
   const [draft, setDraft] = useState<PercentCrop | null>(null);
-  const crop = draft ?? toPercent(figure.crop, image);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const replacing = useRef(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const crop = draft ?? toPercent(savedCrop, image);
+
+  const replace = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || replacing.current) return;
+    replacing.current = true;
+    setLoading(true);
+    setError(null);
+    try {
+      await onReplace(file);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not replace the image.');
+    } finally {
+      replacing.current = false;
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="crop-tool">
@@ -56,7 +79,10 @@ export function CropTool({
           <img src={image.dataUrl} alt="" className="crop-image" draggable={false} />
         </ReactCrop>
       </div>
-      <div className="button-row">
+      <div className="button-row wrap">
+        <button type="button" disabled={loading} onClick={() => fileInput.current?.click()}>
+          {loading ? 'Replacing…' : 'Replace image'}
+        </button>
         <button
           type="button"
           onClick={async () => onChange(findContentBounds(await loadImageElement(image.dataUrl)))}
@@ -68,9 +94,11 @@ export function CropTool({
           Full image
         </button>
         <span className="muted small">
-          {figure.crop.width} × {figure.crop.height} px
+          {savedCrop.width} × {savedCrop.height} px
         </span>
       </div>
+      <input ref={fileInput} type="file" accept="image/*" hidden onChange={replace} />
+      {error && <p className="warning-text small" role="alert">{error}</p>}
     </div>
   );
 }
