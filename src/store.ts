@@ -39,6 +39,7 @@ interface AppState {
   updateSettings: (patch: Partial<Settings>) => void;
   updateFigure: (id: string, patch: Partial<Figure>) => void;
   addImageFiles: (files: File[]) => Promise<void>;
+  setImageFile: (id: string, file: File) => Promise<void>;
   duplicateFigure: (id: string) => void;
   removeFigure: (id: string) => void;
   moveFigure: (id: string, direction: -1 | 1) => void;
@@ -109,6 +110,18 @@ export const useStore = create<AppState>((set, get) => ({
       figures: [...state.figures, ...added],
       selectedId: added[0].id,
     }));
+  },
+
+  setImageFile: async (id, file) => {
+    if (!file.type.startsWith('image/')) throw new Error('Please choose an image file.');
+    const { image, trim } = await importImageFile(file, newId());
+    set((state) => {
+      // The figure may have been deleted while the file was being read.
+      const figures = state.figures.map((f) =>
+        f.id === id ? clampFigureHeight({ ...f, imageId: image.id, crop: trim }, state.settings) : f,
+      );
+      return { figures, images: pruneImages({ ...state.images, [image.id]: image }, figures) };
+    });
   },
 
   duplicateFigure: (id) =>

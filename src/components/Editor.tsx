@@ -17,6 +17,7 @@ export function Editor() {
   const images = useStore((s) => s.images);
   const settings = useStore((s) => s.settings);
   const updateFigure = useStore((s) => s.updateFigure);
+  const setImageFile = useStore((s) => s.setImageFile);
   const duplicateFigure = useStore((s) => s.duplicateFigure);
   const removeFigure = useStore((s) => s.removeFigure);
   const moveFigure = useStore((s) => s.moveFigure);
@@ -131,7 +132,15 @@ export function Editor() {
         </div>
 
         <h3>Crop</h3>
-        {image && <CropTool figure={figure} image={image} onChange={(crop) => update({ crop })} />}
+        {image && (
+          <CropTool
+            key={`${figure.id}-${image.id}`}
+            figure={figure}
+            image={image}
+            onChange={(crop) => update({ crop })}
+            onReplace={(file) => setImageFile(figure.id, file)}
+          />
+        )}
       </section>
 
       <section className="panel editor-size">
