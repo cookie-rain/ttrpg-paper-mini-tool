@@ -2,8 +2,8 @@ import type { Figure, Settings } from '../types';
 import { MIN_FIGURE_HEIGHT_MM, MM_PER_INCH, PAPER_SIZES_MM } from './constants';
 
 /** Printed image size of a figure (one side of the fold). */
-export function figureImageSize(figure: Pick<Figure, 'crop' | 'heightMm'>): { width: number; height: number } {
-  const aspect = figure.crop.width / figure.crop.height;
+export function figureImageSize(figure: Pick<Figure, 'frontImage' | 'heightMm'>): { width: number; height: number } {
+  const aspect = figure.frontImage.crop.width / figure.frontImage.crop.height;
   return { width: figure.heightMm * aspect, height: figure.heightMm };
 }
 
@@ -26,7 +26,7 @@ export function flapHeightMm(settings: Settings): number {
  *   |  flap     |  reinforcement flap (folded base only, 2 × base strip)
  *   +-----------+
  */
-export function cardSize(figure: Pick<Figure, 'crop' | 'heightMm'>, settings: Settings): { width: number; height: number } {
+export function cardSize(figure: Pick<Figure, 'frontImage' | 'heightMm'>, settings: Settings): { width: number; height: number } {
   const image = figureImageSize(figure);
   return {
     width: Math.max(image.width, settings.minWidthMm),
@@ -55,7 +55,7 @@ export function footerReserveMm(settings: Settings): number {
  * Largest image height that still fits on a single sheet, either upright or rotated by 90°.
  * The card width is max(imageWidth, minWidth), so both constraints are checked separately.
  */
-export function maxFigureHeightMm(crop: Figure['crop'], settings: Settings): number {
+export function maxFigureHeightMm(crop: Figure['frontImage']['crop'], settings: Settings): number {
   const area = printableArea(settings);
   const aspect = crop.width / crop.height;
   const fit = (availWidth: number, availHeight: number) => {
@@ -69,6 +69,6 @@ export function maxFigureHeightMm(crop: Figure['crop'], settings: Settings): num
 }
 
 /** Effective print resolution of the cropped image at its printed size. */
-export function effectiveDpi(figure: Pick<Figure, 'crop' | 'heightMm'>): number {
-  return figure.crop.height / (figure.heightMm / MM_PER_INCH);
+export function effectiveDpi(figure: Pick<Figure, 'frontImage' | 'heightMm'>): number {
+  return figure.frontImage.crop.height / (figure.heightMm / MM_PER_INCH);
 }

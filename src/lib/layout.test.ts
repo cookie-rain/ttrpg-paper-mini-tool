@@ -17,12 +17,11 @@ function footprintRect(c: { x: number; y: number; width: number; height: number;
 function figure(overrides: Partial<Figure> = {}): Figure {
   return {
     id: overrides.id ?? 'f1',
-    imageId: 'img',
     name: 'Goblin',
     info: '',
     count: 1,
     color: 'none',
-    crop: { x: 0, y: 0, width: 500, height: 1000 },
+    frontImage: { imageId: 'img', crop: { x: 0, y: 0, width: 500, height: 1000 } },
     heightMm: 35,
     ...overrides,
   };
@@ -57,7 +56,7 @@ describe('geometry', () => {
   it('limits the height so a figure always fits on one sheet', () => {
     const crop = { x: 0, y: 0, width: 1000, height: 1000 };
     const max = maxFigureHeightMm(crop, DEFAULT_SETTINGS);
-    const size = cardSize(figure({ crop, heightMm: max }), DEFAULT_SETTINGS);
+    const size = cardSize(figure({ frontImage: { imageId: 'img', crop }, heightMm: max }), DEFAULT_SETTINGS);
     const area = printableArea(DEFAULT_SETTINGS);
     const fitsUpright = size.width <= area.width && size.height <= area.height;
     const fitsRotated = size.height <= area.width && size.width <= area.height;
@@ -76,7 +75,7 @@ describe('layoutPages', () => {
     const settings = { ...DEFAULT_SETTINGS, packing, gapMm: 2 };
     const mixedFigures = [
       figure({ id: 'a', count: 5, heightMm: 30 }),
-      figure({ id: 'b', count: 4, heightMm: 60, crop: { x: 0, y: 0, width: 1500, height: 1000 } }),
+      figure({ id: 'b', count: 4, heightMm: 60, frontImage: { imageId: 'img', crop: { x: 0, y: 0, width: 1500, height: 1000 } } }),
       figure({ id: 'c', count: 7, heightMm: 20 }),
       figure({ id: 'd', count: 3, heightMm: 90 }),
     ];
@@ -122,7 +121,7 @@ describe('layoutPages', () => {
   it('compact packing never needs more pages than row packing', () => {
     const figures = [
       figure({ id: 'a', count: 13, heightMm: 42 }),
-      figure({ id: 'b', count: 9, heightMm: 25, crop: { x: 0, y: 0, width: 1400, height: 1000 } }),
+      figure({ id: 'b', count: 9, heightMm: 25, frontImage: { imageId: 'img', crop: { x: 0, y: 0, width: 1400, height: 1000 } } }),
       figure({ id: 'c', count: 11, heightMm: 70 }),
     ];
     const rows = layoutPages(figures, { ...DEFAULT_SETTINGS, packing: 'rows' });
@@ -134,7 +133,7 @@ describe('layoutPages', () => {
     // Very wide creature: image width exceeds the page width but the card fits rotated.
     const crop = { x: 0, y: 0, width: 3000, height: 1000 };
     const heightMm = maxFigureHeightMm(crop, DEFAULT_SETTINGS);
-    const { pages, oversizedFigureIds } = layoutPages([figure({ crop, heightMm })], DEFAULT_SETTINGS);
+    const { pages, oversizedFigureIds } = layoutPages([figure({ frontImage: { imageId: 'img', crop }, heightMm })], DEFAULT_SETTINGS);
     expect(oversizedFigureIds).toEqual([]);
     expect(pages[0].cards).toHaveLength(1);
   });
@@ -207,9 +206,9 @@ describe('every paper size', () => {
         const area = printableArea(settings);
         const figures = [
           figure({ id: 'a', count: 9, heightMm: 30 }),
-          figure({ id: 'b', count: 5, heightMm: 55, crop: { x: 0, y: 0, width: 1800, height: 1000 } }),
+          figure({ id: 'b', count: 5, heightMm: 55, frontImage: { imageId: 'img', crop: { x: 0, y: 0, width: 1800, height: 1000 } } }),
           figure({ id: 'c', count: 12, heightMm: 15 }),
-        ].map((f) => ({ ...f, heightMm: Math.min(f.heightMm, maxFigureHeightMm(f.crop, settings)) }));
+        ].map((f) => ({ ...f, heightMm: Math.min(f.heightMm, maxFigureHeightMm(f.frontImage.crop, settings)) }));
         const { pages, oversizedFigureIds } = layoutPages(figures, settings);
         expect(oversizedFigureIds).toEqual([]);
         for (const page of pages) {
@@ -313,7 +312,7 @@ describe('normalizeProject', () => {
   it('fills in missing figure fields instead of crashing later', () => {
     const { figures } = normalizeProject(project([{ id: 'f1', imageId: 'img' }]));
     expect(figures).toHaveLength(1);
-    expect(figures[0].crop).toEqual({ x: 0, y: 0, width: 100, height: 200 });
+    expect(figures[0].frontImage.crop).toEqual({ x: 0, y: 0, width: 100, height: 200 });
     expect(figures[0].count).toBe(1);
     expect(figures[0].color).toBe('none');
     expect(Number.isFinite(figures[0].heightMm)).toBe(true);

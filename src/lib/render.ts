@@ -30,7 +30,7 @@ export async function decodeFigureImages(figures: Figure[], images: Record<strin
   const result: DecodedImages = new Map();
   await Promise.all(
     figures.map(async (figure) => {
-      const stored = images[figure.imageId];
+      const stored = images[figure.frontImage.imageId];
       if (stored) result.set(figure.id, await loadImageElement(stored.dataUrl));
     }),
   );
@@ -115,7 +115,7 @@ function drawCard(
   ctx.fillRect(0, 0, cardWidth, cardHeight);
 
   if (img) {
-    const { x, y, width, height } = figure.crop;
+    const { x, y, width, height } = figure.frontImage.crop;
     // Front half, standing on the front base strip.
     ctx.drawImage(img, x, y, width, height, imageX, foldY, image.width, image.height);
     // Back half, mirrored across the fold line.

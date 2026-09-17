@@ -28,15 +28,20 @@ export interface StoredImage {
   height: number;
 }
 
+/** An image reference and its crop, independent of the figure's printed size. */
+export interface FigureArtwork {
+  imageId: string;
+  crop: CropRect;
+}
+
 export interface Figure {
   id: string;
-  imageId: string;
+  frontImage: FigureArtwork;
   name: string;
   info: string;
   /** How many copies to print. Copies are labelled A, B, C, ... when count > 1. */
   count: number;
   color: BaseColor;
-  crop: CropRect;
   /** Printed height of the (cropped) image on one side of the fold. Width follows the aspect ratio. */
   heightMm: number;
 }

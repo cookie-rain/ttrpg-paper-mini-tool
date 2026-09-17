@@ -44,7 +44,7 @@ export function CropTool({
   const replacing = useRef(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const crop = draft ?? toPercent(figure.crop, image);
+  const crop = draft ?? toPercent(figure.frontImage.crop, image);
 
   const replace = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -56,7 +56,7 @@ export function CropTool({
     try {
       await onReplace(file);
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Could not replace the image.');
+      setError(error instanceof Error ? error.message : 'Could not replace the front image.');
     } finally {
       replacing.current = false;
       setLoading(false);
@@ -94,7 +94,7 @@ export function CropTool({
           Full image
         </button>
         <span className="muted small">
-          {figure.crop.width} × {figure.crop.height} px
+          {figure.frontImage.crop.width} × {figure.frontImage.crop.height} px
         </span>
       </div>
       <input ref={fileInput} type="file" accept="image/*" hidden onChange={replace} />
