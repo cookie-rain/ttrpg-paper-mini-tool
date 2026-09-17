@@ -11,6 +11,8 @@ export type BaseStyle = 'stand' | 'folded';
 export type PackingMode = 'rows' | 'compact';
 export type BaseColor = 'none' | 'blue' | 'red' | 'green' | 'yellow' | 'gray';
 export type SizeCategory = 'small' | 'medium' | 'large' | 'huge' | 'gargantuan';
+/** How back artwork fits the front image's printed dimensions. */
+export type ImageFit = 'contain' | 'cover' | 'stretch';
 
 /** Crop rectangle in source image pixels. */
 export interface CropRect {
@@ -29,14 +31,16 @@ export interface StoredImage {
 }
 
 /** An image reference and its crop, independent of the figure's printed size. */
-export interface FigureArtwork {
+export interface FigureImage {
   imageId: string;
   crop: CropRect;
 }
 
 export interface Figure {
   id: string;
-  frontImage: FigureArtwork;
+  frontImage: FigureImage;
+  /** Omitted to duplicate the front image on the back. */
+  backImage?: FigureImage & { fit: ImageFit };
   name: string;
   info: string;
   /** How many copies to print. Copies are labelled A, B, C, ... when count > 1. */

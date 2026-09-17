@@ -760,6 +760,11 @@ input[type='range'] {
 .editor-size {
   min-height: 0;
 }
+.image-editor-panel:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 .crop-tool {
   display: flex;
   flex-direction: column;

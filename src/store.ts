@@ -40,6 +40,8 @@ interface AppState {
   updateFigure: (id: string, patch: Partial<Figure>) => void;
   addImageFiles: (files: File[]) => Promise<void>;
   setFrontImageFile: (id: string, file: File) => Promise<void>;
+  setBackImageFile: (id: string, file: File) => Promise<void>;
+  removeBackImage: (id: string) => void;
   duplicateFigure: (id: string) => void;
   removeFigure: (id: string) => void;
   moveFigure: (id: string, direction: -1 | 1) => void;
@@ -123,6 +125,29 @@ export const useStore = create<AppState>((set, get) => ({
     });
   },
 
+  setBackImageFile: async (id, file) => {
+    if (!file.type.startsWith('image/')) throw new Error('Please choose an image file.');
+    const figure = get().figures.find((f) => f.id === id);
+    if (!figure) return;
+    const previousImageId = figure.backImage?.imageId;
+    const { image, trim } = await importImageFile(file, newId());
+    set((state) => {
+      // Removing or replacing the back while this file loads cancels this import.
+      const figures = state.figures.map((f): Figure =>
+        f.id === id && f.backImage?.imageId === previousImageId
+          ? { ...f, backImage: { imageId: image.id, crop: trim, fit: f.backImage?.fit ?? 'contain' } }
+          : f,
+      );
+      return { figures, images: pruneImages({ ...state.images, [image.id]: image }, figures) };
+    });
+  },
+
+  removeBackImage: (id) =>
+    set((state) => {
+      const figures = state.figures.map((f) => (f.id === id ? { ...f, backImage: undefined } : f));
+      return { figures, images: pruneImages(state.images, figures) };
+    }),
+
   duplicateFigure: (id) =>
     set((state) => {
       const index = state.figures.findIndex((f) => f.id === id);
@@ -196,7 +221,13 @@ function clampFigureHeight(figure: Figure, settings: Settings): Figure {
 }
 
 function pruneImages(images: Record<string, StoredImage>, figures: Figure[]): Record<string, StoredImage> {
-  const used = new Set(figures.map((f) => f.frontImage.imageId));
+  const used = new Set(
+    figures.flatMap((f) =>
+      f.backImage
+        ? [f.frontImage.imageId, f.backImage.imageId]
+        : [f.frontImage.imageId],
+    ),
+  );
   forgetImages(Object.entries(images).filter(([id]) => !used.has(id)).map(([, image]) => image.dataUrl));
   return Object.fromEntries(Object.entries(images).filter(([id]) => used.has(id)));
 }
@@ -233,11 +264,33 @@ function normalizeFigure(raw: unknown, images: Record<string, StoredImage>): Fig
       imageId: image.id,
       crop: { x: Math.round(finite(crop.x, 0)), y: Math.round(finite(crop.y, 0)), width, height },
     },
+    backImage: normalizeBackImage(figure.backImage, images),
     name: typeof figure.name === 'string' ? figure.name : '',
     info: typeof figure.info === 'string' ? figure.info : '',
     count: Math.min(999, Math.max(1, Math.round(finite(figure.count, 1)))),
     color: (figure.color as BaseColor) in BASE_COLORS ? (figure.color as BaseColor) : 'none',
     heightMm: Math.max(MIN_FIGURE_HEIGHT_MM, finite(figure.heightMm, DEFAULT_FIGURE_HEIGHT_MM)),
+  };
+}
+
+/** Missing or unusable back artwork falls back to the duplicated front image. */
+function normalizeBackImage(raw: unknown, images: Record<string, StoredImage>): Figure['backImage'] {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const back = raw as Partial<NonNullable<Figure['backImage']>>;
+  const image = typeof back.imageId === 'string' ? images[back.imageId] : undefined;
+  if (!image) return undefined;
+  const crop = back.crop;
+  const x = Math.min(image.width - 1, Math.max(0, Math.round(finite(crop?.x, 0))));
+  const y = Math.min(image.height - 1, Math.max(0, Math.round(finite(crop?.y, 0))));
+  return {
+    imageId: image.id,
+    crop: {
+      x,
+      y,
+      width: Math.min(image.width - x, Math.max(1, Math.round(finite(crop?.width, image.width)))),
+      height: Math.min(image.height - y, Math.max(1, Math.round(finite(crop?.height, image.height)))),
+    },
+    fit: back.fit === 'cover' || back.fit === 'stretch' ? back.fit : 'contain',
   };
 }
 

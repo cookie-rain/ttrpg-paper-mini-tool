@@ -5,7 +5,7 @@ import { cardSize, effectiveDpi, figureImageSize, maxFigureHeightMm } from '../l
 import { indexToLetters } from '../lib/labels';
 import { formatInGame, formatLength } from '../lib/units';
 import { ConfirmButton, Field, InGameInput, LengthInput, NumberInput } from './controls';
-import { CropTool } from './CropTool';
+import { ImageEditor } from './ImageEditor';
 import { FigureImage } from './FigureImage';
 import { SizeLegend } from './SizeLegend';
 import { Stage, type StageItem } from './Stage';
@@ -17,7 +17,6 @@ export function Editor() {
   const images = useStore((s) => s.images);
   const settings = useStore((s) => s.settings);
   const updateFigure = useStore((s) => s.updateFigure);
-  const setFrontImageFile = useStore((s) => s.setFrontImageFile);
   const duplicateFigure = useStore((s) => s.duplicateFigure);
   const removeFigure = useStore((s) => s.removeFigure);
   const moveFigure = useStore((s) => s.moveFigure);
@@ -131,16 +130,7 @@ export function Editor() {
           </Field>
         </div>
 
-        <h3>Front image</h3>
-        {image && (
-          <CropTool
-            key={`${figure.id}-${image.id}`}
-            figure={figure}
-            image={image}
-            onChange={(crop) => update({ frontImage: { ...figure.frontImage, crop } })}
-            onReplace={(file) => setFrontImageFile(figure.id, file)}
-          />
-        )}
+        <ImageEditor key={figure.id} figure={figure} images={images} />
       </section>
 
       <section className="panel editor-size">

@@ -1,5 +1,30 @@
-import type { Figure, Settings } from '../types';
+import type { CropRect, Figure, ImageFit, Settings } from '../types';
 import { MIN_FIGURE_HEIGHT_MM, MM_PER_INCH, PAPER_SIZES_MM } from './constants';
+
+/** Source crop and centred destination for artwork fitted into a fixed-size box. */
+export function fitImage(
+  crop: CropRect,
+  width: number,
+  height: number,
+  fit: ImageFit,
+): { source: CropRect; destination: CropRect } {
+  const source = { ...crop };
+  const destination = { x: 0, y: 0, width, height };
+  if (fit === 'contain') {
+    const scale = Math.min(width / crop.width, height / crop.height);
+    destination.width = crop.width * scale;
+    destination.height = crop.height * scale;
+    destination.x = (width - destination.width) / 2;
+    destination.y = (height - destination.height) / 2;
+  } else if (fit === 'cover') {
+    const scale = Math.max(width / crop.width, height / crop.height);
+    source.width = width / scale;
+    source.height = height / scale;
+    source.x += (crop.width - source.width) / 2;
+    source.y += (crop.height - source.height) / 2;
+  }
+  return { source, destination };
+}
 
 /** Printed image size of a figure (one side of the fold). */
 export function figureImageSize(figure: Pick<Figure, 'frontImage' | 'heightMm'>): { width: number; height: number } {
