@@ -89,8 +89,6 @@ src/
 
 Made by [cookie-rain](https://github.com/cookie-rain), built with [Claude Code](https://claude.com/claude-code).
 
-The reference silhouettes in `src/assets/silhouettes/` were generated with ChatGPT.
-
 ## License
 
 [MIT](LICENSE)
