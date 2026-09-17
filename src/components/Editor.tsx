@@ -17,7 +17,7 @@ export function Editor() {
   const images = useStore((s) => s.images);
   const settings = useStore((s) => s.settings);
   const updateFigure = useStore((s) => s.updateFigure);
-  const replaceImageFile = useStore((s) => s.replaceImageFile);
+  const setImageFile = useStore((s) => s.setImageFile);
   const duplicateFigure = useStore((s) => s.duplicateFigure);
   const removeFigure = useStore((s) => s.removeFigure);
   const moveFigure = useStore((s) => s.moveFigure);
@@ -138,7 +138,7 @@ export function Editor() {
             figure={figure}
             image={image}
             onChange={(crop) => update({ crop })}
-            onReplace={(file) => replaceImageFile(figure.id, file)}
+            onReplace={(file) => setImageFile(figure.id, file)}
           />
         )}
       </section>

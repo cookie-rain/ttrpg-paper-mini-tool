@@ -39,7 +39,7 @@ interface AppState {
   updateSettings: (patch: Partial<Settings>) => void;
   updateFigure: (id: string, patch: Partial<Figure>) => void;
   addImageFiles: (files: File[]) => Promise<void>;
-  replaceImageFile: (id: string, file: File) => Promise<void>;
+  setImageFile: (id: string, file: File) => Promise<void>;
   duplicateFigure: (id: string) => void;
   removeFigure: (id: string) => void;
   moveFigure: (id: string, direction: -1 | 1) => void;
@@ -112,7 +112,7 @@ export const useStore = create<AppState>((set, get) => ({
     }));
   },
 
-  replaceImageFile: async (id, file) => {
+  setImageFile: async (id, file) => {
     if (!file.type.startsWith('image/')) throw new Error('Please choose an image file.');
     const { image, trim } = await importImageFile(file, newId());
     set((state) => {
