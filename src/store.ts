@@ -39,6 +39,7 @@ interface AppState {
   updateSettings: (patch: Partial<Settings>) => void;
   updateFigure: (id: string, patch: Partial<Figure>) => void;
   addImageFiles: (files: File[]) => Promise<void>;
+  setFrontImageFile: (id: string, file: File) => Promise<void>;
   duplicateFigure: (id: string) => void;
   removeFigure: (id: string) => void;
   moveFigure: (id: string, direction: -1 | 1) => void;
@@ -88,12 +89,11 @@ export const useStore = create<AppState>((set, get) => ({
           clampFigureHeight(
             {
               id: newId(),
-              imageId,
+              frontImage: { imageId, crop: trim },
               name: nameFromFileName(file.name),
               info: '',
               count: 1,
               color: 'none',
-              crop: trim,
               heightMm: get().settings.categoryHeightsMm.medium ?? DEFAULT_FIGURE_HEIGHT_MM,
             },
             get().settings,
@@ -109,6 +109,18 @@ export const useStore = create<AppState>((set, get) => ({
       figures: [...state.figures, ...added],
       selectedId: added[0].id,
     }));
+  },
+
+  setFrontImageFile: async (id, file) => {
+    if (!file.type.startsWith('image/')) throw new Error('Please choose an image file.');
+    const { image, trim } = await importImageFile(file, newId());
+    set((state) => {
+      // The figure may have been deleted while the file was being read.
+      const figures = state.figures.map((f) =>
+        f.id === id ? clampFigureHeight({ ...f, frontImage: { imageId: image.id, crop: trim } }, state.settings) : f,
+      );
+      return { figures, images: pruneImages({ ...state.images, [image.id]: image }, figures) };
+    });
   },
 
   duplicateFigure: (id) =>
@@ -179,12 +191,12 @@ function migrateSettings(saved: Partial<Settings> | undefined): Settings {
 }
 
 function clampFigureHeight(figure: Figure, settings: Settings): Figure {
-  const max = maxFigureHeightMm(figure.crop, settings);
+  const max = maxFigureHeightMm(figure.frontImage.crop, settings);
   return figure.heightMm > max ? { ...figure, heightMm: max } : figure;
 }
 
 function pruneImages(images: Record<string, StoredImage>, figures: Figure[]): Record<string, StoredImage> {
-  const used = new Set(figures.map((f) => f.imageId));
+  const used = new Set(figures.map((f) => f.frontImage.imageId));
   forgetImages(Object.entries(images).filter(([id]) => !used.has(id)).map(([, image]) => image.dataUrl));
   return Object.fromEntries(Object.entries(images).filter(([id]) => used.has(id)));
 }
@@ -206,21 +218,25 @@ function normalizeImage(raw: unknown, id: string): StoredImage | null {
 /** Repairs one figure from a project file. Returns null when it has no usable image or crop. */
 function normalizeFigure(raw: unknown, images: Record<string, StoredImage>): Figure | null {
   if (!raw || typeof raw !== 'object') return null;
-  const figure = raw as Partial<Figure>;
-  const image = typeof figure.imageId === 'string' ? images[figure.imageId] : undefined;
+  // Older projects stored imageId and crop directly on the figure.
+  const figure = raw as Partial<Figure> & { imageId?: string; crop?: CropRect };
+  const frontImage = figure.frontImage ?? { imageId: figure.imageId, crop: figure.crop };
+  const image = typeof frontImage.imageId === 'string' ? images[frontImage.imageId] : undefined;
   if (!image) return null;
-  const crop = (figure.crop ?? {}) as Partial<CropRect>;
+  const crop = (frontImage.crop ?? {}) as Partial<CropRect>;
   const width = Math.round(finite(crop.width, image.width));
   const height = Math.round(finite(crop.height, image.height));
   if (width < 1 || height < 1) return null;
   return {
     id: typeof figure.id === 'string' && figure.id ? figure.id : newId(),
-    imageId: image.id,
+    frontImage: {
+      imageId: image.id,
+      crop: { x: Math.round(finite(crop.x, 0)), y: Math.round(finite(crop.y, 0)), width, height },
+    },
     name: typeof figure.name === 'string' ? figure.name : '',
     info: typeof figure.info === 'string' ? figure.info : '',
     count: Math.min(999, Math.max(1, Math.round(finite(figure.count, 1)))),
     color: (figure.color as BaseColor) in BASE_COLORS ? (figure.color as BaseColor) : 'none',
-    crop: { x: Math.round(finite(crop.x, 0)), y: Math.round(finite(crop.y, 0)), width, height },
     heightMm: Math.max(MIN_FIGURE_HEIGHT_MM, finite(figure.heightMm, DEFAULT_FIGURE_HEIGHT_MM)),
   };
 }

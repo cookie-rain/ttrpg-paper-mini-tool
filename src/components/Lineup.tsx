@@ -40,7 +40,7 @@ export function Lineup() {
         selected: figure.id === selectedId,
         onClick: () => select(figure.id),
         render: (pxPerMm) => (
-          <FigureImage figure={figure} image={images[figure.imageId]} heightPx={figure.heightMm * pxPerMm} />
+          <FigureImage figure={figure} image={images[figure.frontImage.imageId]} heightPx={figure.heightMm * pxPerMm} />
         ),
         label: (
           <>
@@ -61,7 +61,7 @@ export function Lineup() {
               valueMm={figure.heightMm}
               unit={settings.unit}
               minMm={MIN_FIGURE_HEIGHT_MM}
-              maxMm={maxFigureHeightMm(figure.crop, settings)}
+              maxMm={maxFigureHeightMm(figure.frontImage.crop, settings)}
               onChange={(heightMm) => {
                 select(figure.id);
                 updateFigure(figure.id, { heightMm });
@@ -73,7 +73,7 @@ export function Lineup() {
               valueMm={figure.heightMm}
               settings={settings}
               minMm={MIN_FIGURE_HEIGHT_MM}
-              maxMm={maxFigureHeightMm(figure.crop, settings)}
+              maxMm={maxFigureHeightMm(figure.frontImage.crop, settings)}
               onChange={(heightMm) => {
                 select(figure.id);
                 updateFigure(figure.id, { heightMm });

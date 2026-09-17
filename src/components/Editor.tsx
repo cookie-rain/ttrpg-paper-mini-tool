@@ -17,6 +17,7 @@ export function Editor() {
   const images = useStore((s) => s.images);
   const settings = useStore((s) => s.settings);
   const updateFigure = useStore((s) => s.updateFigure);
+  const setFrontImageFile = useStore((s) => s.setFrontImageFile);
   const duplicateFigure = useStore((s) => s.duplicateFigure);
   const removeFigure = useStore((s) => s.removeFigure);
   const moveFigure = useStore((s) => s.moveFigure);
@@ -31,9 +32,9 @@ export function Editor() {
     );
   }
 
-  const image = images[figure.imageId];
+  const image = images[figure.frontImage.imageId];
   const update = (patch: Partial<Figure>) => updateFigure(figure.id, patch);
-  const maxHeight = maxFigureHeightMm(figure.crop, settings);
+  const maxHeight = maxFigureHeightMm(figure.frontImage.crop, settings);
   const size = figureImageSize(figure);
   const card = cardSize(figure, settings);
   const dpi = effectiveDpi(figure);
@@ -130,8 +131,16 @@ export function Editor() {
           </Field>
         </div>
 
-        <h3>Crop</h3>
-        {image && <CropTool figure={figure} image={image} onChange={(crop) => update({ crop })} />}
+        <h3>Front image</h3>
+        {image && (
+          <CropTool
+            key={`${figure.id}-${image.id}`}
+            figure={figure}
+            image={image}
+            onChange={(crop) => update({ frontImage: { ...figure.frontImage, crop } })}
+            onReplace={(file) => setFrontImageFile(figure.id, file)}
+          />
+        )}
       </section>
 
       <section className="panel editor-size">
