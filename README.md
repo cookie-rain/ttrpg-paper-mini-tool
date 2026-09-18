@@ -3,51 +3,79 @@
 Turn character and monster images into printable, foldable **paper miniatures** for tabletop RPGs —
 right in your browser. Works for Daggerheart, D&D, Pathfinder or any other game played on a 1-inch grid.
 
+Print them **flat** for plastic stands or a folded paper foot, or **triangular** as a small tube that
+stands on its own and shows the figure from the front, both front corners and the back.
+
 Your images never leave your computer: everything runs locally in the browser.
 
 ## Screenshots
 
-Line up every figure on a battle map grid and match their sizes by eye:
-
-![Lineup view: five figures standing side by side on a one-inch grid, compared against the Small to Gargantuan reference silhouettes](docs/screenshots/lineup.png)
-
-| Editor — crop, name and scale one figure | Print — layout, options and live preview |
+| Editor — flat mini | Editor — triangular mini |
 | --- | --- |
-| ![Editor view with the crop tool, name and colour fields, and a size slider next to the reference silhouettes](docs/screenshots/editor.png) | ![Print view with paper and layout settings beside a preview of the printable sheet](docs/screenshots/print.png) |
+| ![Editor with a flat mini: its front and mirrored back stand side by side next to the Small to Gargantuan reference silhouettes, with the crop tool, name, copies and base colour on the left](docs/screenshots/editor-flat.png) | ![Editor with a triangular mini: its front-right, front-left and back faces stand side by side, the back face highlighted and open in the crop tool](docs/screenshots/editor-triangular.png) |
+| **Lineup — match sizes on a battle map grid** | **Print — layout, options and live preview** |
+| ![Lineup of three figures on a one-inch grid in front of the reference silhouettes, each with its print and in-game height](docs/screenshots/lineup.png) | ![Print view with the paper, base and triangular-mini settings beside a preview sheet holding flat and triangular cards](docs/screenshots/print.png) |
 
 ## How a paper mini works
 
-Each mini is printed as one strip that you cut out and fold at the top:
+### Flat
+
+One strip that you cut out and fold at the top:
 
 ```
-+-------------+  base strip (back)   ← text upside down, reads correctly from behind
-|   image     |  mirrored image
++-------------+  base strip (back)   <- text upside down, reads correctly from behind
+|   image     |  back image, upside down
 +- - fold - - +
 |   image     |  front image
-+-------------+  base strip (front)  ← name + info, goes into the stand
++-------------+  base strip (front)  <- name + info, goes into the stand
 ```
 
 After folding, the figure shows the artwork on both sides and the base strip clips into a small plastic stand.
+Without a back image of its own, the back shows the front mirrored, as if you were looking at the figure
+from behind.
 
 No stands? Choose **Folded paper foot**: both base strips bend out 90° into a foot, and an extra flap
 (twice the strip length) folds under it as reinforcement.
+
+### Triangular
+
+Three faces in a row, folded into a triangular tube that stands on its own — no stand needed:
+
+```
++-------------+-------------+-------------+\
+| front right | front left  |    back     | |  glue tab
+|   (main)    | (mirrored)  |             | |
++-------------+-------------+-------------+/
+|  optional band: name and colour         |
++-----------------------------------------+
+```
+
+The two front faces meet in a fold at the figure's front edge, so it faces you from either side of it, and
+the glued seam closes the tube at the back. Front left shows the main image mirrored until you give it an
+image of its own. No glue at hand? Switch the tab off and close the tube with a piece of tape.
 
 ## Features
 
 - **Drag & drop** images anywhere into the window, or use *Add images*.
 - **Auto-trim**: transparent (or plain-coloured) borders are removed automatically; fine-tune with the crop tool.
+- **Flat or triangular**, switchable per figure.
+- **Separate artwork per side**: a back image for flat minis; front right, front left and back for triangular
+  ones. Start a side from the main image with one click, then rotate it in 90° steps or mirror it.
 - **Size by eye**: compare each figure with reference silhouettes (Small, Medium, Large, Huge, Gargantuan)
-  and scale it with a slider. The aspect ratio is always kept.
+  and scale it with a slider. The aspect ratio is always kept, and every side of the figure is shown at once.
 - **Lineup view**: see all figures side by side on a battle map grid and match their sizes;
-  toggle individual figures, silhouettes and height lines.
+  switch between front and back, and toggle individual figures, silhouettes and height lines.
 - **Copies with letters**: print *Goblin A, B, C…* so identical enemies are easy to tell apart.
-- **Base colours**: blue, red, green, yellow or gray — filled or as side stripes. Text colour adapts for contrast.
-- **Two text lines** (name + info) on both sides of the base.
+- **Base colours**: blue, red, green, yellow, gray or any colour from the colour picker, which remembers the
+  ones you used. Filled or as side stripes; the text colour adapts for contrast.
+- **Two text lines** (name + info) on the base of flat minis — or none at all.
+- **Triangular minis** get a band along the bottom instead of a base: name and colour, colour only, colour
+  marks at the folds, or nothing — on the back face or all the way round.
 - **Two layouts** on A5, A4, A3, US Letter, US Legal or Tabloid: *Easy to cut* (straight cuts only) or *Save paper* (tight packing).
 - **In-game size** of every figure in metres and feet (Small 1 m, Medium 1.8 m, Large 3–5 m, Huge 5–10 m, Gargantuan 10 m+).
-- **Base styles**: for plastic stands or as a folded paper foot.
+- **Base styles** for flat minis: for plastic stands or as a folded paper foot.
 - **Cut and fold line styles**: solid, dashed, corner marks, edge ticks or none.
-- **PDF download or direct printing**, with a live preview and a calibration ruler.
+- **PDF download or direct printing**, with a live preview, page numbers and a calibration ruler.
 - **mm or inches** throughout.
 - **Projects** are saved automatically in the browser and can be exported/imported as a file.
 
@@ -55,7 +83,7 @@ No stands? Choose **Folded paper foot**: both base strips bend out 90° into a f
 
 - Transparent PNGs give the best results.
 - Always print at **100 % / “actual size”** and check the calibration ruler on the page.
-- Heavier paper (160–250 g/m²) makes sturdier minis.
+- Heavier paper (160–250 g/m²) makes sturdier minis — and triangular ones stand firmer on it.
 
 ## Development
 
@@ -77,6 +105,7 @@ Tech stack: [Vite](https://vite.dev/), [React](https://react.dev/), TypeScript, 
 src/
   lib/          framework-independent logic
     geometry.ts   card and figure dimensions
+    sides.ts      a figure's artwork per side: crop, rotation and mirroring
     layout.ts     packs cards onto pages
     render.ts     draws pages onto a canvas (used for preview, PDF and printing)
     output.ts     PDF export and browser printing

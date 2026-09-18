@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import ReactCrop, { type PercentCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
-import type { CropRect, Figure, StoredImage } from '../types';
+import type { CropRect, FigureSide, StoredImage } from '../types';
 import { findContentBounds, loadImageElement } from '../lib/image';
 
 const MIN_CROP_PX = 4;
@@ -28,21 +28,21 @@ function toPixels(crop: PercentCrop, image: StoredImage): CropRect {
 }
 
 export function CropTool({
-  figure,
+  side,
   image,
   onChange,
 }: {
-  figure: Figure;
+  side: FigureSide;
   image: StoredImage;
   onChange: (crop: CropRect) => void;
 }) {
   // Local state while dragging; the figure is only updated when the drag ends to avoid re-rendering everything.
   const [draft, setDraft] = useState<PercentCrop | null>(null);
-  const crop = draft ?? toPercent(figure.crop, image);
+  const crop = draft ?? toPercent(side.crop, image);
 
   return (
     <div className="crop-tool">
-      <div className="crop-area checkerboard">
+      <div className="crop-area">
         <ReactCrop
           crop={crop}
           keepSelection
@@ -53,23 +53,28 @@ export function CropTool({
             if (percent.width > 0 && percent.height > 0) onChange(toPixels(percent, image));
           }}
         >
-          <img src={image.dataUrl} alt="" className="crop-image" draggable={false} />
+          <img src={image.dataUrl} alt="" className="crop-image checkerboard" draggable={false} />
         </ReactCrop>
       </div>
-      <div className="button-row">
+      <span className="muted small crop-size">
+        {side.crop.width} × {side.crop.height} px
+      </span>
+      <div className="button-row crop-actions">
         <button
           type="button"
+          className="side-action"
           onClick={async () => onChange(findContentBounds(await loadImageElement(image.dataUrl)))}
           title="Crop to the visible pixels of the image"
         >
           Auto-trim
         </button>
-        <button type="button" onClick={() => onChange({ x: 0, y: 0, width: image.width, height: image.height })}>
+        <button
+          type="button"
+          className="side-action"
+          onClick={() => onChange({ x: 0, y: 0, width: image.width, height: image.height })}
+        >
           Full image
         </button>
-        <span className="muted small">
-          {figure.crop.width} × {figure.crop.height} px
-        </span>
       </div>
     </div>
   );

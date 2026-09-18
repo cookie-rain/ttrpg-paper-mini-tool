@@ -16,21 +16,32 @@ const SILHOUETTE_OVERLAP: Record<Exclude<SizeCategory, 'gargantuan'>, number> = 
   small: 0.65,
 };
 
-/** How much of the largest silhouette the following figures may cover by default, as a fraction of its width. */
-const DEFAULT_FIGURE_OVERLAP = 0.15;
-/** Upper limit when wide figures need more room (see Stage fit="all"). */
-const MAX_FIGURE_OVERLAP = 0.5;
+/**
+ * A point inside one silhouette, used to say how far left the figures beside the row may reach:
+ * `fraction` is measured across that silhouette's width, 0 at its left edge and 1 at its right one.
+ */
+export interface OverlapAnchor {
+  category: SizeCategory;
+  fraction: number;
+}
+
+/** Where the figures start by default in the editor: just barely over the dragon. */
+export const EDITOR_START: OverlapAnchor = { category: 'gargantuan', fraction: 0.85 };
+/**
+ * The lineup packs more figures in, so its area reaches deep into the row. Its items are centred,
+ * so the area has to start further left than where the figures should appear: starting at the middle
+ * of Large puts a handful of centred figures at roughly the middle of the ogre.
+ */
+export const LINEUP_START: OverlapAnchor = { category: 'large', fraction: 0.5 };
+/** However tight it gets, the figures stop at the middle of the Medium silhouette. */
+export const OVERLAP_LIMIT: OverlapAnchor = { category: 'medium', fraction: 0.5 };
 
 /**
  * All reference silhouettes in one column, smallest on the left, overlapping to save space.
  * Smaller silhouettes are drawn in front, and the figures next to the row may overlap the largest one,
  * so it stays in the background. Heights are labelled by the reference lines, not here.
  */
-export function silhouetteRowItem(
-  settings: Settings,
-  figureOverlap = DEFAULT_FIGURE_OVERLAP,
-  maxFigureOverlap = MAX_FIGURE_OVERLAP,
-): StageItem {
+export function silhouetteRowItem(settings: Settings, startAt: OverlapAnchor = EDITOR_START): StageItem {
   const entries = [...SIZE_CATEGORIES].reverse().map((category) => {
     const size = silhouetteSizeMm(category.id, settings.categoryHeightsMm[category.id]);
     return { category, heightMm: size.height, widthMm: size.width };
@@ -51,8 +62,15 @@ export function silhouetteRowItem(
   const minLeftMm = Math.min(...positioned.map((entry) => entry.leftMm));
   const placed = positioned.map((entry) => ({ ...entry, leftMm: entry.leftMm - minLeftMm }));
   const totalWidthMm = Math.max(...placed.map((entry) => entry.leftMm + entry.widthMm));
-  const trailingOverlapMm = entries[0].widthMm * figureOverlap;
   const tallestMm = Math.max(...entries.map((entry) => entry.heightMm));
+  /** Distance from the right edge of the row to a point inside one of the silhouettes. */
+  const overlapTo = (anchor: OverlapAnchor) => {
+    const entry = placed.find((candidate) => candidate.category.id === anchor.category);
+    return entry ? Math.max(0, totalWidthMm - (entry.leftMm + entry.widthMm * anchor.fraction)) : 0;
+  };
+  const trailingOverlapMm = overlapTo(startAt);
+  // When figures are wide or numerous they may slide further left rather than shrink the whole stage.
+  const maxTrailingOverlapMm = Math.max(trailingOverlapMm, overlapTo(OVERLAP_LIMIT));
 
   return {
     key: 'silhouettes',
@@ -60,7 +78,7 @@ export function silhouetteRowItem(
     heightMm: tallestMm,
     widthMm: totalWidthMm,
     trailingOverlapMm,
-    maxTrailingOverlapMm: entries[0].widthMm * Math.max(figureOverlap, maxFigureOverlap),
+    maxTrailingOverlapMm,
     render: (pxPerMm) => (
       <div className="silhouette-row" style={{ width: totalWidthMm * pxPerMm }}>
         {/* Largest first in DOM order, so smaller silhouettes end up in front. */}

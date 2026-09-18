@@ -20,6 +20,10 @@ export const PRINT_DPI = 300;
 /** Below this effective resolution a figure is flagged as blurry when printed. */
 export const LOW_DPI_WARNING = 200;
 export const MIN_FIGURE_HEIGHT_MM = 8;
+/** Width of the trapezoid glue tab that closes a prism. */
+export const GLUE_TAB_MM = 8;
+/** How far each end of the glue tab tapers in, so it slides behind the opposite panel. */
+export const GLUE_TAB_TAPER_MM = 1.5;
 
 /** Portrait dimensions. Order defines the order in the paper selector. */
 export const PAPER_SIZES_MM: Record<PaperSize, { width: number; height: number; label: string }> = {
@@ -47,7 +51,12 @@ export const BASE_COLORS: Record<BaseColor, { label: string; hex: string | null 
   green: { label: 'Green', hex: '#4c8052' },
   yellow: { label: 'Yellow', hex: '#e3bf4a' },
   gray: { label: 'Gray', hex: '#8c8c8c' },
+  // Resolved per figure; see figureColorHex.
+  custom: { label: 'Custom', hex: null },
 };
+
+/** Starting point of the custom colour picker. */
+export const DEFAULT_CUSTOM_COLOR = '#7a4fb8';
 
 export const DEFAULT_SETTINGS: Settings = {
   unit: 'mm',
@@ -61,7 +70,14 @@ export const DEFAULT_SETTINGS: Settings = {
   packing: 'rows',
   baseHeightMm: 10,
   minWidthMm: 22,
+  flatText: true,
   calibrationRuler: true,
+  glueTab: true,
+  prismLabel: 'text',
+  prismLabelPlacement: 'around',
+  prismLabelHeightMm: 7,
+  prismWidths: 'auto',
+  customColors: [],
   // 1, 1.5, 2.5, 4 and 6 inches.
   categoryHeightsMm: { small: 25.4, medium: 38.1, large: 63.5, huge: 101.6, gargantuan: 152.4 },
 };

@@ -183,13 +183,34 @@ export function InGameInput({
   );
 }
 
-export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+/** Keeps a measurement in one piece, so a wrapping label breaks between values and not inside one. */
+export function Measure({ children }: { children: ReactNode }) {
+  return <span className="nowrap">{children}</span>;
+}
+
+/**
+ * A caption above a control. Pass `group` when the field holds several controls rather than one:
+ * a <label> binds to the first control inside it, which would make hovering any of a row of buttons
+ * light up the first one, and would forward stray clicks to it.
+ */
+export function Field({
+  label,
+  children,
+  hint,
+  group = false,
+}: {
+  label: string;
+  children: ReactNode;
+  hint?: string;
+  group?: boolean;
+}) {
+  const Tag = group ? 'div' : 'label';
   return (
-    <label className="field">
+    <Tag className="field">
       <span className="field-label">{label}</span>
       {children}
       {hint && <span className="field-hint">{hint}</span>}
-    </label>
+    </Tag>
   );
 }
 

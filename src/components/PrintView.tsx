@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store';
-import type { BaseStyle, ColorStyle, CutLineStyle, FoldLineStyle, PackingMode, PaperSize } from '../types';
+import type {
+  BaseStyle,
+  ColorStyle,
+  CutLineStyle,
+  FoldLineStyle,
+  PackingMode,
+  PaperSize,
+  PrismLabel,
+  PrismLabelPlacement,
+  PrismWidths,
+} from '../types';
 import { LOW_DPI_WARNING, PAPER_SIZES_MM } from '../lib/constants';
 import { effectiveDpi } from '../lib/geometry';
 import { layoutPages } from '../lib/layout';
@@ -8,6 +18,10 @@ import { buildPdf, downloadBlob, printPages, renderPrintPages } from '../lib/out
 import { createPageCanvas, decodeFigureImages, renderPage } from '../lib/render';
 import { Field, LengthInput, Segmented } from './controls';
 
+/** A band that only carries colour can be as thin as a line. */
+const BAND_MIN_MM = 1;
+/** With a name in it the band needs room for the type. */
+const TEXT_BAND_MIN_MM = 4;
 const PREVIEW_WIDTH_PX = 560;
 const PREVIEW_DEBOUNCE_MS = 150;
 
@@ -23,6 +37,9 @@ export function PrintView() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const hasPrisms = figures.some((f) => f.shape === 'prism');
+  const minBandMm = settings.prismLabel === 'text' ? TEXT_BAND_MIN_MM : BAND_MIN_MM;
+  const hasFlat = figures.some((f) => f.shape === 'flat');
   const lowResFigures = figures.filter((f) => effectiveDpi(f) < LOW_DPI_WARNING);
   const oversized = figures.filter((f) => layout.oversizedFigureIds.includes(f.id));
 
@@ -67,6 +84,7 @@ export function PrintView() {
           </select>
         </Field>
         <Field
+          group
           label="Layout"
           hint={
             settings.packing === 'rows'
@@ -84,7 +102,9 @@ export function PrintView() {
             onChange={(packing) => updateSettings({ packing })}
           />
         </Field>
+        {(hasFlat || !hasPrisms) && (
         <Field
+          group
           label="Base"
           hint={
             settings.baseStyle === 'stand'
@@ -102,6 +122,104 @@ export function PrintView() {
             onChange={(baseStyle) => updateSettings({ baseStyle })}
           />
         </Field>
+        )}
+        {(hasFlat || !hasPrisms) && (
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={settings.flatText}
+              onChange={(e) => updateSettings({ flatText: e.target.checked })}
+            />
+            Name and info on the base
+          </label>
+        )}
+        {hasPrisms && (
+          <>
+            <h3>Triangular minis</h3>
+            <Field
+              label="Bottom band"
+              hint={
+                settings.prismLabel === 'none'
+                  ? 'The artwork runs all the way down to the edge the figure stands on.'
+                  : 'A strip below the artwork, printed on the outside of the tube.'
+              }
+            >
+              <select
+                value={settings.prismLabel}
+                onChange={(e) => {
+                  const prismLabel = e.target.value as PrismLabel;
+                  // A colour-only band can be a hairline; text needs room to stay readable.
+                  const floor = prismLabel === 'text' ? TEXT_BAND_MIN_MM : BAND_MIN_MM;
+                  updateSettings({
+                    prismLabel,
+                    prismLabelHeightMm: Math.max(settings.prismLabelHeightMm, floor),
+                  });
+                }}
+              >
+                <option value="text">Name and colour</option>
+                <option value="stripe">Colour only</option>
+                <option value="edges">Colour marks at the folds</option>
+                <option value="none">Nothing</option>
+              </select>
+            </Field>
+            {settings.prismLabel !== 'none' && (
+              <>
+                <Field group label="Band on">
+                  <Segmented<PrismLabelPlacement>
+                    ariaLabel="Band on"
+                    value={settings.prismLabelPlacement}
+                    options={[
+                      { value: 'back', label: 'Back only' },
+                      { value: 'around', label: 'All faces' },
+                    ]}
+                    onChange={(prismLabelPlacement) => updateSettings({ prismLabelPlacement })}
+                  />
+                </Field>
+                <div className="field-row">
+                  <Field label="Band height">
+                    <LengthInput
+                      valueMm={settings.prismLabelHeightMm}
+                      unit={settings.unit}
+                      minMm={minBandMm}
+                      maxMm={20}
+                      onChange={(prismLabelHeightMm) => updateSettings({ prismLabelHeightMm })}
+                    />
+                  </Field>
+                </div>
+              </>
+            )}
+            <Field
+              group
+              label="Faces"
+              hint={
+                settings.prismWidths === 'auto'
+                  ? 'Each face is as wide as the artwork on it, so the tube follows the figure.'
+                  : 'All three faces share the widest, giving an evenly shaped tube.'
+              }
+            >
+              <Segmented<PrismWidths>
+                ariaLabel="Faces"
+                value={settings.prismWidths}
+                options={[
+                  { value: 'auto', label: 'Fit artwork' },
+                  { value: 'equal', label: 'Equal width' },
+                ]}
+                onChange={(prismWidths) => updateSettings({ prismWidths })}
+              />
+            </Field>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={settings.glueTab}
+                onChange={(e) => updateSettings({ glueTab: e.target.checked })}
+              />
+              Glue tab for closing the tube
+            </label>
+            <p className="muted small">Without the tab, close the tube with a piece of tape instead.</p>
+            <h3>All minis</h3>
+          </>
+        )}
+
         <Field label="Cut lines">
           <select
             value={settings.cutLines}
@@ -124,7 +242,7 @@ export function PrintView() {
             <option value="none">None</option>
           </select>
         </Field>
-        <Field label="Base color style">
+        <Field group label="Base color style">
           <Segmented<ColorStyle>
             ariaLabel="Base color style"
             value={settings.colorStyle}

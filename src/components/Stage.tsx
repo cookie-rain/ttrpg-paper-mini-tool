@@ -38,6 +38,8 @@ const DEFAULT_MIN_GAP_PX = 16;
 const DEFAULT_LABEL_WIDTH_PX = 110;
 /** Space kept free between neighbouring labels. */
 const LABEL_SPACING_PX = 8;
+/** Slack against rounding, so the row never trips the scrolling area by a pixel. */
+const SCROLL_SAFETY_PX = 4;
 /** With `fit="leading"`, at least this share of the free width stays available for the scrolling items. */
 const MIN_SCROLL_SHARE = 0.4;
 const SCROLLBAR_ALLOWANCE_PX = 24;
@@ -67,6 +69,10 @@ export function Stage({
   referenceLines = [],
   minGapPx = DEFAULT_MIN_GAP_PX,
   labelWidthPx = DEFAULT_LABEL_WIDTH_PX,
+  fixedGapPx,
+  centerItems = false,
+  leadingBehind = false,
+  itemAreaShare = 1,
 }: {
   items: StageItem[];
   /** Fixed item on the left that never scrolls. */
@@ -85,6 +91,22 @@ export function Stage({
   minGapPx?: number;
   /** Width reserved for the label under each item; the gap grows so neighbouring labels never touch. */
   labelWidthPx?: number;
+  /**
+   * Keeps the space between items at exactly this many pixels instead of widening it for the labels.
+   * Labels are narrowed to match, so they still cannot touch. Use when a steady gap matters more
+   * than full-width labels, e.g. the two sides of one figure sitting next to each other.
+   */
+  fixedGapPx?: number;
+  /** Centres the items in the space left over, so they do not drift sideways while being resized. */
+  centerItems?: boolean;
+  /**
+   * Draws the leading item as a backdrop instead of placing it in the row. The items then keep their own
+   * fixed area and simply cover the backdrop when they are large enough, so their position never depends
+   * on how wide the leading item happens to be.
+   */
+  leadingBehind?: boolean;
+  /** Share of the free width the items are fitted into. The rest stays empty, half at either end. */
+  itemAreaShare?: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -130,6 +152,8 @@ export function Stage({
     return () => observer.disconnect();
   }, [updateScroll, referenceLines.length]);
 
+  const resolveGap = (widths: number[]) => stageGap(widths, minGapPx, labelWidthPx, fixedGapPx);
+
   const allItems = leading ? [leading, ...items] : items;
   const requiredLines = referenceLines.filter((line) => !line.optional);
   const tallest = Math.max(10, ...allItems.map((item) => item.heightMm), ...requiredLines.map((line) => line.heightMm));
@@ -139,19 +163,46 @@ export function Stage({
   const freeWidth = available.width - labelsWidth - EDGE_PADDING_PX;
   let byWidth = MAX_PX_PER_MM;
   let overlapMm = leading?.trailingOverlapMm ?? 0;
-  if (fit === 'all') {
-    ({ scale: byWidth, overlapMm } = fitAll(leading, items, freeWidth, minGapPx, labelWidthPx, byHeight));
+  if (fit === 'all' && leadingBehind) {
+    // The backdrop plays no part in the fit; the items get their own slice of the width and stay centred.
+    // Whatever the row ends up holding has to fit the area exactly: a scrollbar here would not only look
+    // wrong, it would also steal height from the drawing area below.
+    const compensation = centerItems ? labelsWidth : 0;
+    const room = freeWidth - EDGE_PADDING_PX - compensation - SCROLL_SAFETY_PX;
+    const budget = Math.max(0, Math.min(room, available.width * itemAreaShare));
+    ({ scale: byWidth } = fitAll(undefined, items, budget, byHeight, resolveGap, labelWidthPx, false, centerItems));
+    overlapMm = 0;
+  } else if (fit === 'all') {
+    // Centred items need a box that does not move: a growing overlap would drag the middle left with it.
+    ({ scale: byWidth, overlapMm } = fitAll(
+      leading,
+      items,
+      freeWidth,
+      byHeight,
+      resolveGap,
+      labelWidthPx,
+      !centerItems,
+      centerItems,
+    ));
   } else if (fit === 'leading' && leading) {
-    const leadingWidthMm = leading.widthMm - (leading.trailingOverlapMm ?? 0);
-    byWidth = (freeWidth * (1 - MIN_SCROLL_SHARE)) / leadingWidthMm;
+    // Let the figures slide further over the silhouettes before the whole stage shrinks.
+    const baseOverlap = leading.trailingOverlapMm ?? 0;
+    const maxOverlap = Math.max(baseOverlap, leading.maxTrailingOverlapMm ?? baseOverlap);
+    const allowedMm = byHeight > 0 ? (freeWidth * (1 - MIN_SCROLL_SHARE)) / byHeight : Infinity;
+    overlapMm = Math.min(maxOverlap, Math.max(baseOverlap, leading.widthMm - allowedMm));
+    byWidth = (freeWidth * (1 - MIN_SCROLL_SHARE)) / Math.max(0.1, leading.widthMm - overlapMm);
   }
   const minScale = fit === 'all' ? MIN_PX_PER_MM_FIT_ALL : MIN_PX_PER_MM;
   const pxPerMm = Math.min(MAX_PX_PER_MM, Math.max(minScale, Math.min(byHeight, byWidth)));
   const itemWidthsPx = items.map((item) => item.widthMm * pxPerMm);
-  const gapPx = uniformGap(itemWidthsPx, minGapPx, labelWidthPx);
+  const gapPx = resolveGap(itemWidthsPx);
+  const last = itemWidthsPx[itemWidthsPx.length - 1] ?? 0;
   // Labels may be wider than their image; pad the ends so the first and last label are not cut off.
-  const padStartPx = Math.max(0, (labelWidthPx - (itemWidthsPx[0] ?? 0)) / 2);
-  const padEndPx = Math.max(0, (labelWidthPx - (itemWidthsPx[itemWidthsPx.length - 1] ?? 0)) / 2);
+  const firstPadPx = Math.max(0, (labelWidthPx - (itemWidthsPx[0] ?? 0)) / 2);
+  const lastPadPx = Math.max(0, (labelWidthPx - last) / 2);
+  // Centring only reads as centred when both ends are padded the same, whatever the items measure.
+  const padStartPx = centerItems ? Math.max(firstPadPx, lastPadPx) : firstPadPx;
+  const padEndPx = centerItems ? padStartPx : lastPadPx;
   const squarePx = GRID_SQUARE_MM * pxPerMm;
   // The drawing area always fills the available height. When the scale is limited by the width, the grid simply
   // continues upwards above the tallest item instead of leaving empty space below the labels.
@@ -203,27 +254,39 @@ export function Stage({
           </defs>
           <rect width="100%" height="100%" fill={`url(#${gridPatternId})`} />
         </svg>
-        {visibleLines.map((line) => (
-          <div key={lineKey(line)} className="reference-line" style={{ bottom: line.heightMm * pxPerMm }} />
-        ))}
       </div>
 
       <div className="stage-body">
+        {/* Own layer, so the size lines stay readable across the silhouettes behind the figures. */}
+        <div className="stage-lines" style={{ height: drawHeight }}>
+          {visibleLines.map((line) => (
+            <div key={lineKey(line)} className="reference-line" style={{ bottom: line.heightMm * pxPerMm }} />
+          ))}
+        </div>
         {leading && (
-          <div className="stage-leading">{renderColumn(leading, leading.widthMm * pxPerMm, leading.widthMm * pxPerMm)}</div>
+          <div className={`stage-leading ${leadingBehind ? 'behind' : ''}`}>
+            {renderColumn(leading, leading.widthMm * pxPerMm, leading.widthMm * pxPerMm)}
+          </div>
         )}
 
-        <div className="stage-scroll-area" style={{ marginLeft: leading ? -overlapPx - padStartPx : 0 }}>
+        <div
+          className="stage-scroll-area"
+          style={{ marginLeft: leading && !leadingBehind ? -overlapPx - padStartPx : 0 }}
+        >
           <div
             ref={scrollRef}
             className={`stage-scroll ${fadeLeft ? 'fade-left' : ''} ${fadeRight ? 'fade-right' : ''}`}
             onScroll={updateScroll}
           >
             <div
-              className="stage-row"
+              className={`stage-row ${centerItems ? 'centered' : ''}`}
               style={{
                 gap: gapPx,
-                paddingLeft: leading ? padStartPx : padStartPx + EDGE_PADDING_PX,
+                paddingLeft:
+                  (leading && !centerItems && !leadingBehind ? padStartPx : padStartPx + EDGE_PADDING_PX) +
+                  // The line labels sit to the right of this area, so centring inside it reads as
+                  // left-of-centre on the stage. Padding the left by their width evens that out.
+                  (centerItems && leadingBehind ? labelsWidth : 0),
                 paddingRight: padEndPx + EDGE_PADDING_PX,
               }}
             >
@@ -346,6 +409,16 @@ function LineLabel({ line }: { line: ReferenceLine }) {
 }
 
 /**
+ * The gap between neighbouring items, following whichever is wider: the images or their labels.
+ * It never drops below `fixedGap`, so wide images keep a steady distance while being resized, and it
+ * opens up beyond that only when narrow images would otherwise let two labels touch.
+ */
+export function stageGap(widths: number[], minGap: number, labelWidth: number, fixedGap?: number): number {
+  const needed = uniformGap(widths, minGap, labelWidth);
+  return fixedGap === undefined ? needed : Math.max(fixedGap, needed);
+}
+
+/**
  * One gap for all neighbours: at least `minGap`, and large enough that no two neighbouring labels overlap.
  * Uniform spacing reads better than gaps that depend on each image's width.
  */
@@ -368,21 +441,26 @@ function fitAll(
   leading: StageItem | undefined,
   items: StageItem[],
   availableWidth: number,
-  minGap: number,
-  labelWidth: number,
   heightScale: number,
+  resolveGap: (widths: number[]) => number,
+  labelWidth: number,
+  growOverlap: boolean,
+  symmetricPads: boolean,
 ): { scale: number; overlapMm: number } {
   const baseOverlap = leading?.trailingOverlapMm ?? 0;
-  const maxOverlap = Math.max(baseOverlap, leading?.maxTrailingOverlapMm ?? baseOverlap);
+  const maxOverlap = growOverlap ? Math.max(baseOverlap, leading?.maxTrailingOverlapMm ?? baseOverlap) : baseOverlap;
 
   // Width of everything except the overlap, in pixels, at the given scale.
   const widthAt = (scale: number, overlapMm: number) => {
     const widths = items.map((item) => item.widthMm * scale);
-    const gap = uniformGap(widths, minGap, labelWidth);
+    const gap = resolveGap(widths);
     const leadingPx = leading ? (leading.widthMm - overlapMm) * scale : 0;
     const first = widths[0] ?? 0;
     const last = widths[widths.length - 1] ?? 0;
-    const pads = Math.max(0, (labelWidth - first) / 2) + Math.max(0, (labelWidth - last) / 2);
+    const firstPad = Math.max(0, (labelWidth - first) / 2);
+    const lastPad = Math.max(0, (labelWidth - last) / 2);
+    // Centring pads both ends to the larger of the two, so the fit has to expect that as well.
+    const pads = symmetricPads ? 2 * Math.max(firstPad, lastPad) : firstPad + lastPad;
     return leadingPx + widths.reduce((sum, w) => sum + w, 0) + gap * Math.max(0, widths.length - 1) + pads;
   };
 

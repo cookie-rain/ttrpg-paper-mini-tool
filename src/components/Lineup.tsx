@@ -1,15 +1,13 @@
 import { useStore } from '../store';
 import { MIN_FIGURE_HEIGHT_MM, SIZE_CATEGORIES } from '../lib/constants';
-import { figureImageSize, maxFigureHeightMm } from '../lib/geometry';
+import { maxFigureHeightMm, sideSize } from '../lib/geometry';
+import { flatBack } from '../lib/sides';
 import { formatCategoryInGame, formatLength } from '../lib/units';
-import { Field, InGameInput, LengthInput } from './controls';
+import { Field, InGameInput, LengthInput, Measure, Segmented } from './controls';
 import { FigureImage } from './FigureImage';
 import { SizeLegend } from './SizeLegend';
 import { Stage, type StageItem } from './Stage';
-import { referenceLines, silhouetteRowItem } from './stageItems';
-
-/** In the lineup the figures may walk further in front of the dragon than in the editor. */
-const LINEUP_FIGURE_OVERLAP = 0.5;
+import { LINEUP_START, referenceLines, silhouetteRowItem } from './stageItems';
 
 export function Lineup() {
   const figures = useStore((s) => s.figures);
@@ -30,8 +28,14 @@ export function Lineup() {
       hiddenIds: isHidden ? [...lineup.hiddenIds, id] : lineup.hiddenIds.filter((hiddenId) => hiddenId !== id),
     });
 
+  const anyBacks = figures.some((f) => f.back);
+
   const items: StageItem[] = visibleFigures.map<StageItem>((figure) => {
-      const size = figureImageSize(figure);
+      // Seen from behind a flat mini shows its mirrored main image by default; a prism without a back
+      // keeps showing its front, so the row never has gaps.
+      const back = figure.shape === 'flat' ? flatBack(figure) : (figure.back ?? figure.front);
+      const shown = lineup.showSide === 'back' ? back : figure.front;
+      const size = sideSize(shown, figure.heightMm);
       return {
         key: figure.id,
         kind: 'figure',
@@ -40,7 +44,12 @@ export function Lineup() {
         selected: figure.id === selectedId,
         onClick: () => select(figure.id),
         render: (pxPerMm) => (
-          <FigureImage figure={figure} image={images[figure.imageId]} heightPx={figure.heightMm * pxPerMm} />
+          <FigureImage
+            side={shown}
+            image={images[shown.imageId]}
+            alt={figure.name}
+            heightPx={figure.heightMm * pxPerMm}
+          />
         ),
         label: (
           <>
@@ -53,7 +62,8 @@ export function Lineup() {
               <strong>{figure.name || 'Unnamed'}</strong>
             </button>
             <span className="size-print small" title="Print size">
-              {formatLength(size.width, settings.unit)} × {formatLength(size.height, settings.unit)}
+              <Measure>{formatLength(size.width, settings.unit)}</Measure> ×{' '}
+              <Measure>{formatLength(size.height, settings.unit)}</Measure>
             </span>
             <LengthInput
               compact
@@ -61,7 +71,7 @@ export function Lineup() {
               valueMm={figure.heightMm}
               unit={settings.unit}
               minMm={MIN_FIGURE_HEIGHT_MM}
-              maxMm={maxFigureHeightMm(figure.crop, settings)}
+              maxMm={maxFigureHeightMm(figure, settings)}
               onChange={(heightMm) => {
                 select(figure.id);
                 updateFigure(figure.id, { heightMm });
@@ -73,7 +83,7 @@ export function Lineup() {
               valueMm={figure.heightMm}
               settings={settings}
               minMm={MIN_FIGURE_HEIGHT_MM}
-              maxMm={maxFigureHeightMm(figure.crop, settings)}
+              maxMm={maxFigureHeightMm(figure, settings)}
               onChange={(heightMm) => {
                 select(figure.id);
                 updateFigure(figure.id, { heightMm });
@@ -110,6 +120,17 @@ export function Lineup() {
               />
               Height lines
             </label>
+            {anyBacks && (
+              <Segmented<'front' | 'back'>
+                ariaLabel="Artwork shown"
+                value={lineup.showSide}
+                options={[
+                  { value: 'front', label: 'Front' },
+                  { value: 'back', label: 'Back' },
+                ]}
+                onChange={(showSide) => updateLineup({ showSide })}
+              />
+            )}
           </div>
         </div>
         {items.length === 0 && !lineup.showSilhouettes ? (
@@ -118,10 +139,11 @@ export function Lineup() {
           </div>
         ) : (
           <Stage
-            leading={lineup.showSilhouettes ? silhouetteRowItem(settings, LINEUP_FIGURE_OVERLAP) : undefined}
+            leading={lineup.showSilhouettes ? silhouetteRowItem(settings, LINEUP_START) : undefined}
             items={items}
             labelHeight={122}
             labelWidthPx={96}
+            centerItems
             fit="leading"
             referenceLines={lineup.showHeightLines ? referenceLines(settings) : []}
           />

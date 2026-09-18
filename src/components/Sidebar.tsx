@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { useStore } from '../store';
-import { BASE_COLORS } from '../lib/constants';
+import { figureColorHex } from '../lib/colors';
+import { sideAspect } from '../lib/sides';
 import { FigureImage } from './FigureImage';
 
 export function Sidebar() {
@@ -46,7 +47,7 @@ export function Sidebar() {
       ) : (
         <ul className="figure-list">
           {figures.map((figure) => {
-            const color = BASE_COLORS[figure.color].hex;
+            const color = figureColorHex(figure);
             return (
               <li key={figure.id}>
                 <button
@@ -56,9 +57,10 @@ export function Sidebar() {
                 >
                   <span className="thumb">
                     <FigureImage
-                      figure={figure}
-                      image={images[figure.imageId]}
-                      heightPx={Math.min(44, (44 * figure.crop.height) / figure.crop.width)}
+                      side={figure.front}
+                      image={images[figure.front.imageId]}
+                      alt={figure.name}
+                      heightPx={Math.min(44, 44 / sideAspect(figure.front))}
                     />
                   </span>
                   <span className="figure-list-text">
