@@ -130,7 +130,7 @@ export function Editor() {
             <button type="button" onClick={() => duplicateFigure(figure.id)}>
               Duplicate
             </button>
-            <ConfirmButton confirmLabel="Really delete?" onConfirm={() => removeFigure(figure.id)}>
+            <ConfirmButton confirmLabel="Delete?" onConfirm={() => removeFigure(figure.id)}>
               Delete
             </ConfirmButton>
           </div>
