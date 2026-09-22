@@ -20,6 +20,8 @@ export const PRINT_DPI = 300;
 /** Below this effective resolution a figure is flagged as blurry when printed. */
 export const LOW_DPI_WARNING = 200;
 export const MIN_FIGURE_HEIGHT_MM = 8;
+/** A face never gets narrower than this, whatever is typed into its width field. */
+export const MIN_FACE_WIDTH_MM = 5;
 /** Width of the trapezoid glue tab that closes a prism. */
 export const GLUE_TAB_MM = 8;
 /** How far each end of the glue tab tapers in, so it slides behind the opposite panel. */
@@ -74,9 +76,10 @@ export const DEFAULT_SETTINGS: Settings = {
   calibrationRuler: true,
   glueTab: true,
   prismLabel: 'text',
-  prismLabelPlacement: 'around',
+  prismBandSides: { front: true, left: true, back: true },
   prismLabelHeightMm: 7,
   prismWidths: 'auto',
+  linkFrontFaces: true,
   customColors: [],
   // 1, 1.5, 2.5, 4 and 6 inches.
   categoryHeightsMm: { small: 25.4, medium: 38.1, large: 63.5, huge: 101.6, gargantuan: 152.4 },

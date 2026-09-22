@@ -12,9 +12,9 @@ Your images never leave your computer: everything runs locally in the browser.
 
 | Editor — flat mini | Editor — triangular mini |
 | --- | --- |
-| ![Editor with a flat mini: its front and mirrored back stand side by side next to the Small to Gargantuan reference silhouettes, with the crop tool, name, copies and base colour on the left](docs/screenshots/editor-flat.png) | ![Editor with a triangular mini: its front-right, front-left and back faces stand side by side, the back face highlighted and open in the crop tool](docs/screenshots/editor-triangular.png) |
+| ![Editor with a flat mini: its front and mirrored back stand side by side against the Small to Gargantuan reference silhouettes, with the card width below them and the crop tool, name, copies and base colour on the left](docs/screenshots/editor-flat.png) | ![Editor with a triangular mini: Side A, Side B and Side C stand side by side against the reference silhouettes, each with its width below, and Side A is open in the crop tool](docs/screenshots/editor-triangular.png) |
 | **Lineup — match sizes on a battle map grid** | **Print — layout, options and live preview** |
-| ![Lineup of three figures on a one-inch grid in front of the reference silhouettes, each with its print and in-game height](docs/screenshots/lineup.png) | ![Print view with the paper, base and triangular-mini settings beside a preview sheet holding flat and triangular cards](docs/screenshots/print.png) |
+| ![Lineup of three figures on a one-inch grid in front of the reference silhouettes, each with its print and in-game height](docs/screenshots/lineup.png) | ![Print view with the paper, base and triangular-mini settings beside a preview sheet holding flat cards and unfolded triangular strips](docs/screenshots/print.png) |
 
 ## How a paper mini works
 
@@ -43,24 +43,26 @@ Three faces in a row, folded into a triangular tube that stands on its own — n
 
 ```
 +-------------+-------------+-------------+\
-| front right | front left  |    back     | |  glue tab
-|   (main)    | (mirrored)  |             | |
+|   Side A    |   Side B    |   Side C    | |  glue tab
+|   (main)    |             |             | |
 +-------------+-------------+-------------+/
 |  optional band: name and colour         |
 +-----------------------------------------+
 ```
 
-The two front faces meet in a fold at the figure's front edge, so it faces you from either side of it, and
-the glued seam closes the tube at the back. Front left shows the main image mirrored until you give it an
-image of its own. No glue at hand? Switch the tab off and close the tube with a piece of tape.
+Side A and Side B meet in a fold at the figure's front edge, so it faces you from either side of it, and
+the glued seam closes the tube behind. Each face takes its own image, or stays blank; *Use main* puts the
+main image on one, mirrored. A face can be made wider than its artwork — needed when one image is much
+wider than the others, or the tube will not close — and the artwork is then dragged across it.
+No glue at hand? Switch the tab off and close the tube with a piece of tape.
 
 ## Features
 
 - **Drag & drop** images anywhere into the window, or use *Add images*.
 - **Auto-trim**: transparent (or plain-coloured) borders are removed automatically; fine-tune with the crop tool.
 - **Flat or triangular**, switchable per figure.
-- **Separate artwork per side**: a back image for flat minis; front right, front left and back for triangular
-  ones. Start a side from the main image with one click, then rotate it in 90° steps or mirror it.
+- **Separate artwork per side**: a back image for flat minis; Side A, B and C for triangular ones.
+  Start a side from the main image with one click, then rotate it in 90° steps or mirror it.
 - **Size by eye**: compare each figure with reference silhouettes (Small, Medium, Large, Huge, Gargantuan)
   and scale it with a slider. The aspect ratio is always kept, and every side of the figure is shown at once.
 - **Lineup view**: see all figures side by side on a battle map grid and match their sizes;
@@ -70,7 +72,8 @@ image of its own. No glue at hand? Switch the tab off and close the tube with a 
   ones you used. Filled or as side stripes; the text colour adapts for contrast.
 - **Two text lines** (name + info) on the base of flat minis — or none at all.
 - **Triangular minis** get a band along the bottom instead of a base: name and colour, colour only, colour
-  marks at the folds, or nothing — on the back face or all the way round.
+  marks at the folds, or nothing — on whichever of the three faces you pick. Face widths can be set by
+  hand or kept equal, with a warning when one face grows too wide for the tube to close.
 - **Two layouts** on A5, A4, A3, US Letter, US Legal or Tabloid: *Easy to cut* (straight cuts only) or *Save paper* (tight packing).
 - **In-game size** of every figure in metres and feet (Small 1 m, Medium 1.8 m, Large 3–5 m, Huge 5–10 m, Gargantuan 10 m+).
 - **Base styles** for flat minis: for plastic stands or as a folded paper foot.

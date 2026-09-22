@@ -20,8 +20,8 @@ export type FigureShape = 'flat' | 'prism';
  * Printing is single-sided, so everything sits on the outside of the tube.
  */
 export type PrismLabel = 'text' | 'stripe' | 'edges' | 'none';
-/** Whether the band covers only the back face or runs around all three faces. */
-export type PrismLabelPlacement = 'back' | 'around';
+/** Which faces of a prism carry the band along the bottom. None of them means no band at all. */
+export type PrismBandSides = Record<SideKey, boolean>;
 /** 'auto': each prism face is as wide as the artwork on it. 'equal': all three faces share the widest. */
 export type PrismWidths = 'auto' | 'equal';
 export type SizeCategory = 'small' | 'medium' | 'large' | 'huge' | 'gargantuan';
@@ -44,8 +44,21 @@ export interface ImageTransform {
   flipY: boolean;
 }
 
-/** Which piece of a figure's artwork is meant: the main image, the back, or a prism's front-left face. */
+/**
+ * Which piece of a figure's artwork is meant. A flat mini has a front and a back; a prism has three
+ * faces, labelled Side A, Side B and Side C in the order they are printed:
+ *
+ *   'front' -> Side A (the main image)   'left' -> Side B   'back' -> Side C
+ */
 export type SideKey = 'front' | 'back' | 'left';
+
+/** How one face of a prism is laid out, independently of the artwork on it. */
+export interface FaceLayout {
+  /** Printed width of the face, or null to follow the artwork. Never narrower than the artwork. */
+  widthMm: number | null;
+  /** Where the artwork sits in a face wider than itself: 0 at the left edge, 0.5 centred, 1 at the right. */
+  align: number;
+}
 
 /** One piece of artwork on a figure: which image, which part of it, and how it is oriented. */
 export interface FigureSide {
@@ -86,6 +99,8 @@ export interface Figure {
   left: FigureSide | null;
   /** Printed height of the artwork. Width follows the aspect ratio. */
   heightMm: number;
+  /** Per-face width and alignment, used when the figure is a prism. */
+  faces: Record<SideKey, FaceLayout>;
 }
 
 export interface Settings {
@@ -107,10 +122,12 @@ export interface Settings {
   /** Print a trapezoid glue tab for closing a prism. Without it the tube is taped shut instead. */
   glueTab: boolean;
   prismLabel: PrismLabel;
-  prismLabelPlacement: PrismLabelPlacement;
+  prismBandSides: PrismBandSides;
   /** Height of that band. Ignored when `prismLabel` is 'none'. */
   prismLabelHeightMm: number;
   prismWidths: PrismWidths;
+  /** Move the artwork on a prism's two front faces together, mirrored about the edge they share. */
+  linkFrontFaces: boolean;
   /** Custom colours picked earlier, most recent first, offered again in the colour picker. */
   customColors: string[];
   calibrationRuler: boolean;

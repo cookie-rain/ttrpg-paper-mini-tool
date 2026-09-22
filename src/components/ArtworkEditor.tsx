@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { useStore } from '../store';
 import type { Figure, FigureShape, FigureSide, SideKey } from '../types';
-import { rotateSide } from '../lib/sides';
+import { PRISM_SIDES, rotateSide } from '../lib/sides';
 import { CropTool } from './CropTool';
 
 /** The pieces of artwork each shape has, in the order they are offered. */
@@ -10,11 +10,7 @@ export const SIDE_TABS: Record<FigureShape, { key: SideKey; label: string }[]> =
     { key: 'front', label: 'Front' },
     { key: 'back', label: 'Back' },
   ],
-  prism: [
-    { key: 'front', label: 'Front right' },
-    { key: 'left', label: 'Front left' },
-    { key: 'back', label: 'Back' },
-  ],
+  prism: PRISM_SIDES,
 };
 
 /** The tab to show: the one asked for, or the main image when the shape has no such side. */
@@ -74,11 +70,9 @@ function SidePanel({ figure, which }: { figure: Figure; which: SideKey }) {
   const image = side ? images[side.imageId] : undefined;
 
   const emptyText =
-    which === 'left'
-      ? 'No image of its own yet: this face shows the main image mirrored.'
-      : figure.shape === 'prism'
-        ? 'No back image yet: this face of the tube stays blank.'
-        : 'No back image yet: the main image is mirrored onto the back.';
+    figure.shape === 'prism'
+      ? 'No image yet: this face of the tube stays blank. “Use main” puts the main image on it, mirrored.'
+      : 'No back image yet: the main image is mirrored onto the back.';
 
   return (
     <>

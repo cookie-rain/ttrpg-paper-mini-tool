@@ -199,9 +199,9 @@ export function Field({
   hint,
   group = false,
 }: {
-  label: string;
+  label: ReactNode;
   children: ReactNode;
-  hint?: string;
+  hint?: ReactNode;
   group?: boolean;
 }) {
   const Tag = group ? 'div' : 'label';

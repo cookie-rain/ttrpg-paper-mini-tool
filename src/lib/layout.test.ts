@@ -11,7 +11,8 @@ import {
   prismBandMm,
   prismPanelWidths,
   printableArea,
-  prismFaces,
+  prismCloses,
+  prismStrip,
   widestSideMm,
 } from './geometry';
 import { BRAND, CALIBRATION_NOTE, planFooter } from './render';
@@ -26,10 +27,24 @@ import {
 } from './colors';
 import { BASE_COLORS, DEFAULT_CUSTOM_COLOR } from './constants';
 import { stageGap } from '../components/Stage';
+import { dragAlign } from '../components/FaceArtwork';
 import { normalizeProject, useStore } from '../store';
-import { figureImageIds, flatBack, IDENTITY_TRANSFORM, mirrored, printedSides, rotateSide, sideAspect } from './sides';
+import {
+  defaultFaces,
+  DEFAULT_FACE,
+  figureImageIds,
+  flatBack,
+  IDENTITY_TRANSFORM,
+  alignPartner,
+  linkedFaceAligns,
+  mirrored,
+  printedSides,
+  rotateSide,
+  sideAspect,
+} from './sides';
 import { indexToLetters, nameFromFileName } from './labels';
 import { layoutPages } from './layout';
+import { cardCutSegments, mergeCutSegments } from './cutlines';
 import { parseDecimal } from '../components/controls';
 import { formatCategoryInGame, formatInGame, inGameMetres, inGameToMm } from './units';
 
@@ -54,6 +69,7 @@ function figure(overrides: Partial<Figure> = {}): Figure {
     back: null,
     left: null,
     heightMm: 35,
+    faces: defaultFaces(),
     ...overrides,
   };
 }
@@ -491,27 +507,27 @@ describe('prism geometry', () => {
 
   it('lays out three faces plus the glue tab', () => {
     const f = prism({ back: side(1000, 1000, 'img2') });
-    const { right, left, back } = prismPanelWidths(f, DEFAULT_SETTINGS);
-    expect(right).toBeCloseTo(20); // the main image: 500/1000 * 40
+    const { front, left, back } = prismPanelWidths(f, DEFAULT_SETTINGS);
+    expect(front).toBeCloseTo(20); // Side A, the main image: 500/1000 * 40
     expect(back).toBeCloseTo(40); // 1000/1000 * 40
-    expect(left).toBeCloseTo(right); // no artwork of its own: the main image mirrored
+    expect(left).toBeCloseTo(front); // no artwork of its own: the main image mirrored
     const card = cardSize(f, DEFAULT_SETTINGS);
-    expect(card.width).toBeCloseTo(right + left + back + glueTabMm(DEFAULT_SETTINGS));
+    expect(card.width).toBeCloseTo(front + left + back + glueTabMm(DEFAULT_SETTINGS));
     expect(card.height).toBeCloseTo(40 + prismBandMm(DEFAULT_SETTINGS));
   });
 
   it('reuses the front width for the back face when there is no back artwork', () => {
-    const { right, back } = prismPanelWidths(prism(), DEFAULT_SETTINGS);
-    expect(back).toBeCloseTo(right);
+    const { front, back } = prismPanelWidths(prism(), DEFAULT_SETTINGS);
+    expect(back).toBeCloseTo(front);
   });
 
   it('squares the tube off in equal-width mode', () => {
     const f = prism({ back: side(1000, 1000, 'img2') });
     const settings = { ...DEFAULT_SETTINGS, prismWidths: 'equal' as const };
-    const { left, back, right } = prismPanelWidths(f, settings);
+    const { front, left, back } = prismPanelWidths(f, settings);
+    expect(front).toBeCloseTo(40);
     expect(left).toBeCloseTo(40);
     expect(back).toBeCloseTo(40);
-    expect(right).toBeCloseTo(40);
     expect(cardSize(f, settings).width).toBeCloseTo(3 * 40 + glueTabMm(settings));
   });
 
@@ -758,14 +774,14 @@ describe('remembered custom colours', () => {
   });
 });
 
-describe('prism front-left face', () => {
+describe('prism Side B', () => {
   const prism = (overrides: Partial<Figure> = {}) =>
     figure({ shape: 'prism', front: side(500, 1000), heightMm: 40, ...overrides });
 
   it('takes its own width once it has artwork', () => {
     const f = prism({ left: side(1500, 1000, 'img3') });
-    const { right, left } = prismPanelWidths(f, DEFAULT_SETTINGS);
-    expect(right).toBeCloseTo(20); // the main image
+    const { front, left } = prismPanelWidths(f, DEFAULT_SETTINGS);
+    expect(front).toBeCloseTo(20); // Side A, the main image
     expect(left).toBeCloseTo(60);
     expect(cardSize(f, DEFAULT_SETTINGS).width).toBeCloseTo(20 + 20 + 60 + glueTabMm(DEFAULT_SETTINGS));
   });
@@ -895,22 +911,360 @@ describe('prism strip order', () => {
   it('prints front right, front left, then the back', () => {
     // The two front faces meet in a plain fold at the figure's front edge; the glued seam closes the
     // tube at the back instead.
-    expect(prismFaces(f, DEFAULT_SETTINGS).map((face) => face.key)).toEqual(['front', 'left', 'back']);
+    expect(prismStrip(f, DEFAULT_SETTINGS).map((face) => face.key)).toEqual(['front', 'left', 'back']);
   });
 
   it('lays the faces edge to edge from the left', () => {
-    const faces = prismFaces(f, DEFAULT_SETTINGS);
+    const faces = prismStrip(f, DEFAULT_SETTINGS);
     expect(faces.map((face) => Math.round(face.x))).toEqual([0, 20, 48]);
     expect(faces.map((face) => Math.round(face.width))).toEqual([20, 28, 36]);
   });
 
-  it('fills the front-left face with the mirrored main image until it has its own', () => {
-    const face = prismFaces({ ...f, left: null }, DEFAULT_SETTINGS).find((candidate) => candidate.key === 'left')!;
-    expect(face.side?.imageId).toBe(f.front.imageId);
-    expect(face.side?.transform.flipX).toBe(true);
+  it('leaves a face without artwork of its own blank', () => {
+    const faces = prismStrip({ ...f, left: null, back: null }, DEFAULT_SETTINGS);
+    expect(faces.find((face) => face.key === 'left')!.side).toBeNull();
+    expect(faces.find((face) => face.key === 'back')!.side).toBeNull();
   });
 
-  it('leaves the back face blank without back artwork', () => {
-    expect(prismFaces({ ...f, back: null }, DEFAULT_SETTINGS).find((face) => face.key === 'back')!.side).toBeNull();
+  it('still gives a blank face a width, so the tube keeps its shape', () => {
+    const widths = prismPanelWidths({ ...f, left: null, back: null }, DEFAULT_SETTINGS);
+    expect(widths.left).toBeCloseTo(widths.front);
+    expect(widths.back).toBeCloseTo(widths.front);
+  });
+});
+
+describe('prism face widths', () => {
+  const prism = (overrides: Partial<Figure> = {}) =>
+    figure({ shape: 'prism', front: side(500, 1000), heightMm: 40, ...overrides });
+  const withWidth = (f: Figure, key: 'front' | 'left' | 'back', widthMm: number | null) => ({
+    ...f,
+    faces: { ...f.faces, [key]: { ...f.faces[key], widthMm } },
+  });
+
+  it('widens a face to the width typed for it', () => {
+    const f = withWidth(prism(), 'left', 50);
+    const widths = prismPanelWidths(f, DEFAULT_SETTINGS);
+    expect(widths.left).toBeCloseTo(50);
+    expect(widths.front).toBeCloseTo(20); // untouched
+  });
+
+  it('never lets a typed width squeeze the artwork', () => {
+    // 5 mm is narrower than the 20 mm the artwork needs, so the artwork wins.
+    expect(prismPanelWidths(withWidth(prism(), 'front', 5), DEFAULT_SETTINGS).front).toBeCloseTo(20);
+  });
+
+  it('gives every face the widest while they are meant to match', () => {
+    const settings = { ...DEFAULT_SETTINGS, prismWidths: 'equal' as const };
+    const widths = prismPanelWidths(withWidth(prism(), 'back', 70), settings);
+    expect([widths.front, widths.left, widths.back]).toEqual([70, 70, 70]);
+  });
+
+  it('counts the typed widths in the card size', () => {
+    const f = withWidth(prism(), 'left', 50);
+    expect(cardSize(f, DEFAULT_SETTINGS).width).toBeCloseTo(20 + 50 + 20 + glueTabMm(DEFAULT_SETTINGS));
+  });
+
+  it('keeps a figure with a typed width on the sheet at its maximum height', () => {
+    // A typed width does not shrink with the height, so the fit has to find the height by search.
+    for (const paper of PAPERS) {
+      const settings = { ...DEFAULT_SETTINGS, paper };
+      const f = withWidth(prism({ back: side(1600, 1000, 'img2') }), 'left', 60);
+      const max = maxFigureHeightMm(f, settings);
+      const card = cardSize({ ...f, heightMm: max }, settings);
+      const area = printableArea(settings);
+      const fits =
+        (card.width <= area.width + 0.01 && card.height <= area.height + 0.01) ||
+        (card.height <= area.width + 0.01 && card.width <= area.height + 0.01);
+      expect(fits, paper).toBe(true);
+    }
+  });
+
+  it('does not use a typed width on a flat mini', () => {
+    const flat = withWidth(figure({ front: side(500, 1000), heightMm: 40 }), 'left', 90);
+    expect(cardSize(flat, DEFAULT_SETTINGS)).toEqual(cardSize(figure({ front: side(500, 1000), heightMm: 40 }), DEFAULT_SETTINGS));
+  });
+});
+
+describe('prismCloses', () => {
+  it('accepts a tube whose faces can reach around', () => {
+    expect(prismCloses({ front: 30, left: 30, back: 30 })).toBe(true);
+    expect(prismCloses({ front: 20, left: 30, back: 40 })).toBe(true);
+  });
+
+  it('rejects one face wider than the other two together', () => {
+    expect(prismCloses({ front: 20, left: 20, back: 60 })).toBe(false);
+    expect(prismCloses({ front: 100, left: 10, back: 10 })).toBe(false);
+  });
+
+  it('rejects faces that only just meet, which leaves nothing to glue', () => {
+    expect(prismCloses({ front: 20, left: 20, back: 40 })).toBe(false);
+    expect(prismCloses({ front: 20, left: 21, back: 40 })).toBe(true);
+  });
+
+  it('always holds while all three faces are the same width', () => {
+    const settings = { ...DEFAULT_SETTINGS, prismWidths: 'equal' as const };
+    const f = figure({ shape: 'prism', front: side(500, 1000), back: side(4000, 1000, 'img2'), heightMm: 40 });
+    expect(prismCloses(prismPanelWidths(f, settings))).toBe(true);
+    // The same figure with each face following its own artwork cannot be closed.
+    expect(prismCloses(prismPanelWidths(f, DEFAULT_SETTINGS))).toBe(false);
+  });
+});
+
+describe('artwork inside a wider face', () => {
+  const f = figure({ shape: 'prism', front: side(500, 1000), heightMm: 40 });
+  const withFace = (align: number, widthMm: number) => ({
+    ...f,
+    faces: { ...f.faces, front: { widthMm, align } },
+  });
+
+  it('centres the artwork by default', () => {
+    expect(prismStrip(withFace(0.5, 60), DEFAULT_SETTINGS)[0].align).toBe(0.5);
+  });
+
+  it('reports the alignment and the widened face to the renderer', () => {
+    const face = prismStrip(withFace(0, 60), DEFAULT_SETTINGS)[0];
+    expect(face.width).toBeCloseTo(60);
+    expect(face.align).toBe(0);
+  });
+});
+
+describe('dragging the artwork across a face', () => {
+  it('maps the distance moved onto the room there is', () => {
+    expect(dragAlign(0, 40)).toBe(0);
+    expect(dragAlign(20, 40)).toBe(0.5);
+    expect(dragAlign(40, 40)).toBe(1);
+  });
+
+  it('stops at the edges of the face', () => {
+    expect(dragAlign(-15, 40)).toBe(0);
+    expect(dragAlign(400, 40)).toBe(1);
+  });
+
+  it('stays put when the face is no wider than its artwork', () => {
+    expect(dragAlign(25, 0)).toBe(0);
+    expect(dragAlign(25, -10)).toBe(0);
+  });
+});
+
+describe('moving faces together', () => {
+  it('mirrors Side B about the edge it shares with Side A', () => {
+    expect(linkedFaceAligns('prism', 'front', 0.25)).toEqual({ front: 0.25, left: 0.75 });
+    expect(linkedFaceAligns('prism', 'left', 0.1)).toEqual({ left: 0.1, front: 0.9 });
+  });
+
+  it('leaves both centred when either is centred', () => {
+    expect(linkedFaceAligns('prism', 'front', 0.5)).toEqual({ front: 0.5, left: 0.5 });
+  });
+
+  it('moves Side C on its own, having no face to match', () => {
+    expect(linkedFaceAligns('prism', 'back', 0.3)).toEqual({ back: 0.3 });
+  });
+
+  it('keeps the two halves of a flat card on top of each other', () => {
+    expect(alignPartner('flat', 'front')).toBe('back');
+    expect(alignPartner('flat', 'back')).toBe('front');
+    expect(linkedFaceAligns('flat', 'front', 0.2)).toEqual({ front: 0.2, back: 0.8 });
+  });
+
+  describe('through the store', () => {
+    const run = (linkFrontFaces: boolean) => {
+      const f = figure({ id: 'x', shape: 'prism' });
+      useStore.setState({ figures: [f], settings: { ...DEFAULT_SETTINGS, linkFrontFaces } });
+      useStore.getState().setFaceAlign('x', 'front', 0.2);
+      return useStore.getState().figures[0].faces;
+    };
+
+    it('carries the other front face along while they are linked', () => {
+      expect(run(true).left.align).toBeCloseTo(0.8);
+      expect(run(true).back.align).toBe(DEFAULT_FACE.align);
+    });
+
+    it('moves only the face that was dragged once they are not', () => {
+      expect(run(false).front.align).toBeCloseTo(0.2);
+      expect(run(false).left.align).toBe(DEFAULT_FACE.align);
+    });
+  });
+});
+
+describe('flat card width', () => {
+  it('follows the artwork, the stand minimum, or a width set by hand -- whichever is widest', () => {
+    const f = figure({ front: side(500, 1000), heightMm: 40 }); // artwork 20 mm
+    expect(cardSize(f, DEFAULT_SETTINGS).width).toBe(DEFAULT_SETTINGS.minWidthMm); // 22 mm
+    const wide = { ...f, faces: { ...f.faces, front: { widthMm: 60, align: 0.5 } } };
+    expect(cardSize(wide, DEFAULT_SETTINGS).width).toBeCloseTo(60);
+  });
+
+  it('is never squeezed below the artwork by the width set for it', () => {
+    const f = figure({ front: side(2000, 1000), heightMm: 40 }); // artwork 80 mm
+    const narrow = { ...f, faces: { ...f.faces, front: { widthMm: 10, align: 0.5 } } };
+    expect(cardSize(narrow, DEFAULT_SETTINGS).width).toBeCloseTo(80);
+  });
+
+  it('keeps a widened card on the sheet at its maximum height', () => {
+    for (const paper of PAPERS) {
+      const settings = { ...DEFAULT_SETTINGS, paper };
+      const f = figure({ front: side(500, 1000) });
+      const wide = { ...f, faces: { ...f.faces, front: { widthMm: 90, align: 0.5 } } };
+      const card = cardSize({ ...wide, heightMm: maxFigureHeightMm(wide, settings) }, settings);
+      const area = printableArea(settings);
+      const fits =
+        (card.width <= area.width + 0.01 && card.height <= area.height + 0.01) ||
+        (card.height <= area.width + 0.01 && card.width <= area.height + 0.01);
+      expect(fits, paper).toBe(true);
+    }
+  });
+});
+
+describe('resetting a face width', () => {
+  const run = (prismWidths: 'auto' | 'equal', widthMm: number | null, which: 'front' | 'left' = 'left') => {
+    const f = figure({
+      id: 'x',
+      shape: 'prism',
+      faces: { front: { widthMm: 40, align: 0.5 }, left: { widthMm: 40, align: 0.5 }, back: { widthMm: 40, align: 0.5 } },
+    });
+    useStore.setState({ figures: [f], settings: { ...DEFAULT_SETTINGS, prismWidths } });
+    useStore.getState().setFaceWidth('x', which, widthMm);
+    return useStore.getState().figures[0].faces;
+  };
+
+  it('puts one face back to following its artwork', () => {
+    const faces = run('auto', null);
+    expect(faces.left.widthMm).toBeNull();
+    expect(faces.front.widthMm).toBe(40); // untouched
+  });
+
+  it('puts all three back while they are meant to match', () => {
+    const faces = run('equal', null);
+    expect([faces.front.widthMm, faces.left.widthMm, faces.back.widthMm]).toEqual([null, null, null]);
+  });
+
+  it('sets all three at once while they are meant to match', () => {
+    const faces = run('equal', 55);
+    expect([faces.front.widthMm, faces.left.widthMm, faces.back.widthMm]).toEqual([55, 55, 55]);
+  });
+});
+
+describe('cut lines', () => {
+  const card = (x: number, y: number, width: number, height: number, rotated = false) => ({
+    figureId: 'f1',
+    letter: '',
+    x,
+    y,
+    width,
+    height,
+    rotated,
+  });
+
+  it('draws an edge two cards share only once', () => {
+    // Two cards side by side, no gap: the line between them belongs to both.
+    const left = cardCutSegments(card(0, 0, 20, 30), figure(), DEFAULT_SETTINGS);
+    const right = cardCutSegments(card(20, 0, 20, 30), figure(), DEFAULT_SETTINGS);
+    const shared = mergeCutSegments([...left, ...right]).filter((s) => s.x1 === 20 && s.x2 === 20);
+    expect(shared).toHaveLength(1);
+    expect([shared[0].y1, shared[0].y2]).toEqual([0, 30]);
+  });
+
+  it('joins edges that only partly overlap into the stretch actually covered', () => {
+    const tall = cardCutSegments(card(0, 0, 20, 40), figure(), DEFAULT_SETTINGS);
+    const short = cardCutSegments(card(20, 10, 20, 15), figure(), DEFAULT_SETTINGS);
+    const shared = mergeCutSegments([...tall, ...short]).filter((s) => s.x1 === 20 && s.x2 === 20);
+    expect(shared).toHaveLength(1);
+    expect([shared[0].y1, shared[0].y2]).toEqual([0, 40]);
+  });
+
+  it('keeps edges that are merely near each other apart', () => {
+    const a = cardCutSegments(card(0, 0, 20, 30), figure(), DEFAULT_SETTINGS);
+    const b = cardCutSegments(card(23, 0, 20, 30), figure(), DEFAULT_SETTINGS); // 3 mm gap
+    const vertical = mergeCutSegments([...a, ...b]).filter((s) => s.x1 === s.x2);
+    expect(vertical.map((s) => s.x1).sort((m, n) => m - n)).toEqual([0, 20, 23, 43]);
+  });
+
+  it('turns a rotated card onto the page', () => {
+    // Placed at (5, 5), 20 wide and 30 tall, turned a quarter: it covers 30 across and 20 down.
+    const segments = cardCutSegments(card(5, 5, 20, 30, true), figure(), DEFAULT_SETTINGS);
+    const xs = segments.flatMap((s) => [s.x1, s.x2]);
+    const ys = segments.flatMap((s) => [s.y1, s.y2]);
+    expect([Math.min(...xs), Math.max(...xs)]).toEqual([5, 35]);
+    expect([Math.min(...ys), Math.max(...ys)]).toEqual([5, 25]);
+  });
+
+  it('leaves the glue tab´s tapers alone, being straight along no axis', () => {
+    const prism = figure({ shape: 'prism', front: side(500, 1000), heightMm: 40 });
+    const segments = cardCutSegments(card(0, 0, 60, 40), prism, DEFAULT_SETTINGS);
+    const tapers = segments.filter((s) => s.x1 !== s.x2 && s.y1 !== s.y2);
+    expect(tapers).toHaveLength(2);
+    expect(mergeCutSegments(segments)).toEqual(expect.arrayContaining(tapers));
+  });
+
+  it('draws nothing at all when cut lines are switched off', () => {
+    expect(cardCutSegments(card(0, 0, 20, 30), figure(), { ...DEFAULT_SETTINGS, cutLines: 'none' })).toEqual([]);
+    expect(mergeCutSegments([])).toEqual([]);
+  });
+
+  it('merges the corner marks two cards make along a shared edge', () => {
+    const settings = { ...DEFAULT_SETTINGS, cutLines: 'corners' as const };
+    const left = cardCutSegments(card(0, 0, 20, 30), figure(), settings);
+    const right = cardCutSegments(card(20, 0, 20, 30), figure(), settings);
+    const onShared = (list: ReturnType<typeof mergeCutSegments>) =>
+      list.filter((s) => s.x1 === 20 && s.x2 === 20);
+    expect(onShared([...left, ...right])).toHaveLength(4); // two marks from each card
+    expect(onShared(mergeCutSegments([...left, ...right]))).toHaveLength(2); // one at each end
+  });
+
+  it('is unaffected by the order the cards come in', () => {
+    const a = cardCutSegments(card(0, 0, 20, 30), figure(), DEFAULT_SETTINGS);
+    const b = cardCutSegments(card(20, 0, 20, 30), figure(), DEFAULT_SETTINGS);
+    const sort = (list: ReturnType<typeof mergeCutSegments>) =>
+      [...list].map((s) => [s.x1, s.y1, s.x2, s.y2].join()).sort();
+    expect(sort(mergeCutSegments([...a, ...b]))).toEqual(sort(mergeCutSegments([...b, ...a])));
+  });
+});
+
+describe('which faces carry the band', () => {
+  const load = (settings: Record<string, unknown>) =>
+    normalizeProject({
+      app: 'ttrpg-paper-mini-tool',
+      version: 1,
+      settings: { ...DEFAULT_SETTINGS, ...settings },
+      figures: [],
+      images: {},
+    }).settings;
+
+  it('reads the faces picked for it', () => {
+    expect(load({ prismBandSides: { front: true, left: false, back: true } }).prismBandSides).toEqual({
+      front: true,
+      left: false,
+      back: true,
+    });
+  });
+
+  it('reads a project that could only say "the back" or "all round"', () => {
+    expect(load({ prismBandSides: undefined, prismLabelPlacement: 'back' }).prismBandSides).toEqual({
+      front: false,
+      left: false,
+      back: true,
+    });
+    expect(load({ prismBandSides: undefined, prismLabelPlacement: 'around' }).prismBandSides).toEqual({
+      front: true,
+      left: true,
+      back: true,
+    });
+  });
+
+  it('falls back to every face when the setting makes no sense', () => {
+    expect(load({ prismBandSides: 'everywhere' }).prismBandSides).toEqual(DEFAULT_SETTINGS.prismBandSides);
+  });
+
+  it('takes no height off the artwork once no face carries it', () => {
+    const none = { front: false, left: false, back: false };
+    expect(prismBandMm({ ...DEFAULT_SETTINGS, prismBandSides: none })).toBe(0);
+    expect(prismBandMm({ ...DEFAULT_SETTINGS, prismBandSides: { ...none, left: true } })).toBeGreaterThan(0);
+    expect(prismBandMm({ ...DEFAULT_SETTINGS, prismLabel: 'none' })).toBe(0);
+  });
+
+  it('leaves the card no taller than the artwork when there is no band', () => {
+    const f = figure({ shape: 'prism', front: side(500, 1000), heightMm: 40 });
+    const settings = { ...DEFAULT_SETTINGS, prismBandSides: { front: false, left: false, back: false } };
+    expect(cardSize(f, settings).height).toBeCloseTo(40);
   });
 });

@@ -2,15 +2,25 @@ import { useRef, useState } from 'react';
 import { useStore } from '../store';
 import type { BaseColor, Figure, FigureShape, FigureSide, SideKey } from '../types';
 import { BASE_COLORS, LOW_DPI_WARNING, MIN_FIGURE_HEIGHT_MM, PAPER_SIZES_MM, SIZE_CATEGORIES } from '../lib/constants';
-import { cardSize, effectiveDpi, figureImageSize, maxFigureHeightMm, sideSize } from '../lib/geometry';
+import {
+  cardSize,
+  effectiveDpi,
+  figureImageSize,
+  maxFigureHeightMm,
+  prismCloses,
+  prismPanelWidths,
+  prismStrip,
+  sideSize,
+} from '../lib/geometry';
 import { rememberColor } from '../lib/colors';
-import { flatBack, mirrored } from '../lib/sides';
+import { flatBack, PRISM_SIDES } from '../lib/sides';
 import { indexToLetters } from '../lib/labels';
 import { formatInGame, formatLength } from '../lib/units';
 import { ConfirmButton, Field, InGameInput, LengthInput, Measure, NumberInput, Segmented } from './controls';
 import { activeSideTab, ArtworkEditor } from './ArtworkEditor';
 import { ColorPicker } from './ColorPicker';
-import { FigureImage } from './FigureImage';
+import { FaceArtwork } from './FaceArtwork';
+import { FaceWidths } from './FaceWidths';
 import { SizeLegend } from './SizeLegend';
 import { Stage, type StageItem } from './Stage';
 import { referenceLines, silhouetteRowItem } from './stageItems';
@@ -34,6 +44,7 @@ export function Editor() {
   const settings = useStore((s) => s.settings);
   const updateFigure = useStore((s) => s.updateFigure);
   const updateSettings = useStore((s) => s.updateSettings);
+  const setFaceAlign = useStore((s) => s.setFaceAlign);
   const duplicateFigure = useStore((s) => s.duplicateFigure);
   const removeFigure = useStore((s) => s.removeFigure);
   const moveFigure = useStore((s) => s.moveFigure);
@@ -62,54 +73,62 @@ export function Editor() {
   const others = figures.filter((f) => f.id !== figure.id);
   // The figure must fit on one sheet, so the chosen paper size limits the height.
   const atMaxHeight = figure.heightMm >= maxHeight - 0.05;
+  const closes = figure.shape !== 'prism' || prismCloses(prismPanelWidths(figure, settings));
   const paperLabel = PAPER_SIZES_MM[settings.paper].label;
 
   // Every printed side stands on the stage, so a rotation or mirror is visible right here. The side
-  // being edited is highlighted. A prism's front left shows the mirrored main image until it has its own.
+  // being edited is highlighted. A prism's Side B shows the mirrored main image until it has its own.
   const shownTab = activeSideTab(figure, sideTab);
-  const backSize = figure.back ? sideSize(figure.back, figure.heightMm) : null;
-  const stageSides: { key: SideKey; label: string; side: FigureSide }[] =
+  const cardWidthMm = card.width;
+  const frontAlign = figure.faces.front.align;
+  const stageSides: { key: SideKey; label: string; side: FigureSide | null; width: number; align: number }[] =
     figure.shape === 'prism'
-      ? [
-          { key: 'front', label: 'Front right', side: figure.front },
-          { key: 'left', label: 'Front left', side: figure.left ?? mirrored(figure.front) },
-          ...(figure.back ? [{ key: 'back' as const, label: 'Back', side: figure.back }] : []),
-        ]
-      : [
-          // A flat mini always has a back: its own artwork, or the main image mirrored.
-          { key: 'front', label: 'Front', side: figure.front },
-          { key: 'back', label: 'Back', side: flatBack(figure) },
+      ? // Exactly the strip that gets printed, blank faces included, so all three are there to compare.
+        prismStrip(figure, settings).map((face) => ({
+          ...face,
+          label: PRISM_SIDES.find((entry) => entry.key === face.key)!.label,
+        }))
+      : // Both halves of one card, so they share its width; the back is mirrored by the fold.
+        [
+          { key: 'front' as const, label: 'Front', side: figure.front, width: cardWidthMm, align: frontAlign },
+          { key: 'back' as const, label: 'Back', side: flatBack(figure), width: cardWidthMm, align: 1 - frontAlign },
         ];
 
-  const stageItems: StageItem[] = stageSides.map(({ key, label, side }) => {
-    const sideDims = sideSize(side, figure.heightMm);
+  const stageItems: StageItem[] = stageSides.map(({ key, label, side, width, align }) => {
+    const sideDims = side ? sideSize(side, figure.heightMm) : { width: 0, height: figure.heightMm };
+    // A prism face may be wider than its artwork; the stage shows that room and lets it be used.
+    const faceWidthMm = Math.max(width, sideDims.width);
     return {
       key: `${figure.id}:${key}`,
       kind: 'figure',
       heightMm: figure.heightMm,
-      widthMm: sideDims.width,
+      widthMm: faceWidthMm,
       selected: key === shownTab,
       onClick: () => setSideTab(key),
       render: (pxPerMm) => (
-        <FigureImage
+        <FaceArtwork
           side={side}
-          image={images[side.imageId]}
+          image={side ? images[side.imageId] : undefined}
           alt={`${figure.name} – ${label}`}
           heightPx={figure.heightMm * pxPerMm}
+          faceWidthPx={faceWidthMm * pxPerMm}
+          align={align}
+          showFace
+          onAlign={(next) => setFaceAlign(figure.id, key, next)}
         />
       ),
       label: (
         <>
           <strong>{label}</strong>
           <span className="size-print">
-            <Measure>{formatLength(sideDims.width, settings.unit)}</Measure> ×{' '}
+            {/* For a prism it is the face that is printed, whether or not artwork fills it. */}
+            <Measure>{formatLength(faceWidthMm, settings.unit)}</Measure> ×{' '}
             <Measure>{formatLength(sideDims.height, settings.unit)}</Measure>
           </span>
-          {key === 'front' && (
-            <span className="size-ingame">
-              <Measure>{formatInGame(sideDims.height, settings.categoryHeightsMm, settings.unit)}</Measure>
-            </span>
-          )}
+          <span className="size-ingame">
+            <Measure>{formatInGame(faceWidthMm, settings.categoryHeightsMm, settings.unit)}</Measure> ×{' '}
+            <Measure>{formatInGame(sideDims.height, settings.categoryHeightsMm, settings.unit)}</Measure>
+          </span>
         </>
       ),
     };
@@ -267,6 +286,8 @@ export function Editor() {
           referenceLines={referenceLines(settings)}
         />
 
+        <FaceWidths figure={figure} />
+
         <div className="size-controls">
           <div className="size-slider-row">
             <input
@@ -300,7 +321,7 @@ export function Editor() {
             />
           </div>
 
-          <p className={`size-limit small ${atMaxHeight ? 'warning-text' : 'muted'}`}>
+          <p className={`size-limit small ${atMaxHeight ? 'warning-note' : 'muted'}`}>
             {atMaxHeight
               ? `Limited to ${formatLength(maxHeight, settings.unit, true)} — the largest size that fits on one ${paperLabel} sheet. `
               : `Max. ${formatLength(maxHeight, settings.unit, true)} on ${paperLabel}. `}
@@ -309,6 +330,13 @@ export function Editor() {
               change paper size
             </button>
           </p>
+
+          {!closes && (
+            <p className="warning-note small">
+              One face is wider than the other two together, so the tube cannot be closed. Make the other
+              faces wider, or tick “All three the same” above.
+            </p>
+          )}
 
           <div className="button-row wrap">
             <span className="muted small">Set height to:</span>
@@ -349,25 +377,6 @@ export function Editor() {
               </dd>
             </div>
             <div>
-              <dt>In-game height</dt>
-              <dd className="size-ingame">
-                <Measure>{formatInGame(size.height, settings.categoryHeightsMm, settings.unit)}</Measure>
-              </dd>
-            </div>
-            <div>
-              <dt>In-game width</dt>
-              <dd className="size-ingame">
-                <Measure>{formatInGame(size.width, settings.categoryHeightsMm, settings.unit)}</Measure>
-                {backSize && Math.abs(backSize.width - size.width) > 0.05 && (
-                  <>
-                    <span className="muted small"> front · </span>
-                    <Measure>{formatInGame(backSize.width, settings.categoryHeightsMm, settings.unit)}</Measure>
-                    <span className="muted small"> back</span>
-                  </>
-                )}
-              </dd>
-            </div>
-            <div>
               <dt>Unfolded card</dt>
               <dd>
                 <Measure>{formatLength(card.width, settings.unit)}</Measure> ×{' '}
@@ -376,8 +385,11 @@ export function Editor() {
             </div>
             <div>
               <dt>Print resolution</dt>
-              <dd className={dpi < LOW_DPI_WARNING ? 'warning-text' : ''}>
-                {Math.round(dpi)} dpi{dpi < LOW_DPI_WARNING ? ' — may look blurry' : ''}
+              <dd>
+                {Math.round(dpi)} dpi
+                {dpi < LOW_DPI_WARNING && (
+                  <span className="warning-note inline small">may look blurry when printed</span>
+                )}
               </dd>
             </div>
           </dl>

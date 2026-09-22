@@ -3,10 +3,12 @@ import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval';
 import type {
   BaseColor,
   CropRect,
+  FaceLayout,
   Figure,
   FigureShape,
   FigureSide,
   ImageTransform,
+  PrismBandSides,
   Project,
   SideKey,
   Settings,
@@ -15,6 +17,7 @@ import type {
 import {
   BASE_COLORS,
   DEFAULT_CUSTOM_COLOR,
+  MIN_FACE_WIDTH_MM,
   DEFAULT_FIGURE_HEIGHT_MM,
   DEFAULT_SETTINGS,
   LEGACY_CATEGORY_HEIGHTS_MM,
@@ -22,7 +25,16 @@ import {
 } from './lib/constants';
 import { forgetImages, importImageFile } from './lib/image';
 import { isHexColor, REMEMBERED_COLORS } from './lib/colors';
-import { figureImageIds, fullCrop, IDENTITY_TRANSFORM, makeSide, mirrored } from './lib/sides';
+import {
+  defaultFaces,
+  DEFAULT_FACE,
+  figureImageIds,
+  fullCrop,
+  IDENTITY_TRANSFORM,
+  linkedFaceAligns,
+  makeSide,
+  mirrored,
+} from './lib/sides';
 import { nameFromFileName } from './lib/labels';
 import { maxFigureHeightMm } from './lib/geometry';
 
@@ -76,6 +88,13 @@ interface AppState {
    */
   copyMainTo: (figureId: string, which: 'back' | 'left') => void;
   updateSide: (figureId: string, which: SideKey, patch: Partial<FigureSide>) => void;
+  /**
+   * Sets the printed width of one face of a prism, or clears it back to following the artwork.
+   * While all faces are meant to be equally wide, the other two follow along.
+   */
+  setFaceWidth: (figureId: string, which: SideKey, widthMm: number | null) => void;
+  /** Moves the artwork inside a face wider than itself: 0 is the left edge, 1 the right. */
+  setFaceAlign: (figureId: string, which: SideKey, align: number) => void;
   duplicateFigure: (id: string) => void;
   removeFigure: (id: string) => void;
   moveFigure: (id: string, direction: -1 | 1) => void;
@@ -137,6 +156,7 @@ export const useStore = create<AppState>((set, get) => ({
               back: null,
               left: null,
               heightMm: get().settings.categoryHeightsMm.medium ?? DEFAULT_FIGURE_HEIGHT_MM,
+              faces: defaultFaces(),
             },
             get().settings,
           ),
@@ -201,6 +221,35 @@ export const useStore = create<AppState>((set, get) => ({
       }),
     })),
 
+  setFaceWidth: (figureId, which, widthMm) =>
+    set((state) => ({
+      figures: state.figures.map((figure) => {
+        if (figure.id !== figureId) return figure;
+        const keys: SideKey[] = state.settings.prismWidths === 'equal' ? ['front', 'left', 'back'] : [which];
+        const faces = { ...figure.faces };
+        for (const key of keys) faces[key] = { ...faces[key], widthMm };
+        return clampFigureHeight({ ...figure, faces }, state.settings);
+      }),
+    })),
+
+  setFaceAlign: (figureId, which, align) =>
+    set((state) => {
+      // A flat mini's halves have to stay on top of each other, so they always move together;
+      // a prism's front faces do while that is asked for.
+      const linked = figureShape(state, figureId) === 'flat' || state.settings.linkFrontFaces;
+      const moved = linked ? linkedFaceAligns(figureShape(state, figureId), which, align) : { [which]: align };
+      return {
+        figures: state.figures.map((figure) => {
+          if (figure.id !== figureId) return figure;
+          const faces = { ...figure.faces };
+          for (const [key, value] of Object.entries(moved)) {
+            faces[key as SideKey] = { ...faces[key as SideKey], align: value };
+          }
+          return { ...figure, faces };
+        }),
+      };
+    }),
+
   duplicateFigure: (id) =>
     set((state) => {
       const index = state.figures.findIndex((f) => f.id === id);
@@ -254,7 +303,7 @@ export const useStore = create<AppState>((set, get) => ({
 }));
 
 /** Fills in settings added in later versions and replaces outdated default values. */
-function migrateSettings(saved: Partial<Settings> | undefined): Settings {
+function migrateSettings(saved: (Partial<Settings> & LegacySettings) | undefined): Settings {
   const savedHeights = saved?.categoryHeightsMm as Partial<Settings['categoryHeightsMm']> | undefined;
   const usesLegacyDefaults =
     !!savedHeights &&
@@ -265,8 +314,10 @@ function migrateSettings(saved: Partial<Settings> | undefined): Settings {
     glueTab: saved?.glueTab === undefined ? DEFAULT_SETTINGS.glueTab : saved.glueTab === true,
     flatText: saved?.flatText === undefined ? DEFAULT_SETTINGS.flatText : saved.flatText === true,
     prismLabel: pickEnum(saved?.prismLabel, ['text', 'stripe', 'edges', 'none'], DEFAULT_SETTINGS.prismLabel),
-    prismLabelPlacement: pickEnum(saved?.prismLabelPlacement, ['back', 'around'], DEFAULT_SETTINGS.prismLabelPlacement),
+    prismBandSides: normalizeBandSides(saved),
     prismWidths: pickEnum(saved?.prismWidths, ['auto', 'equal'], DEFAULT_SETTINGS.prismWidths),
+    linkFrontFaces:
+      saved?.linkFrontFaces === undefined ? DEFAULT_SETTINGS.linkFrontFaces : saved.linkFrontFaces === true,
     customColors: (Array.isArray(saved?.customColors) ? saved.customColors : [])
       .filter((color): color is string => typeof color === 'string' && isHexColor(color))
       .slice(0, REMEMBERED_COLORS),
@@ -279,6 +330,11 @@ function migrateSettings(saved: Partial<Settings> | undefined): Settings {
 function clampFigureHeight(figure: Figure, settings: Settings): Figure {
   const max = maxFigureHeightMm(figure, settings);
   return figure.heightMm > max ? { ...figure, heightMm: max } : figure;
+}
+
+/** The shape of one figure, for decisions that depend on it. */
+function figureShape(state: { figures: Figure[] }, figureId: string): FigureShape {
+  return state.figures.find((figure) => figure.id === figureId)?.shape ?? 'flat';
 }
 
 function pruneImages(images: Record<string, StoredImage>, figures: Figure[]): Record<string, StoredImage> {
@@ -299,6 +355,30 @@ function normalizeImage(raw: unknown, id: string): StoredImage | null {
   const height = Math.round(finite(image.height, 0));
   if (width < 1 || height < 1) return null;
   return { id, dataUrl: image.dataUrl, width, height };
+}
+
+/**
+ * Which faces carry the band. Projects saved before each face could be picked separately stored either
+ * "the back only" or "all the way round"; both still read as the faces they meant.
+ */
+function normalizeBandSides(saved: (Partial<Settings> & LegacySettings) | undefined): PrismBandSides {
+  const sides = saved?.prismBandSides;
+  if (sides && typeof sides === 'object') {
+    return {
+      front: sides.front === true,
+      left: sides.left === true,
+      back: sides.back === true,
+    };
+  }
+  if (saved?.prismLabelPlacement === 'back') return { front: false, left: false, back: true };
+  if (saved?.prismLabelPlacement === 'around') return { front: true, left: true, back: true };
+  return { ...DEFAULT_SETTINGS.prismBandSides };
+}
+
+/** Settings as earlier versions stored them. */
+interface LegacySettings {
+  /** Before each face could be picked separately. */
+  prismLabelPlacement?: unknown;
 }
 
 function pickEnum<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
@@ -365,7 +445,23 @@ function normalizeFigure(raw: unknown, images: Record<string, StoredImage>): Fig
     // Saved as `right` on this branch before the two front faces swapped names.
     left: normalizeSide(figure.left ?? figure.right, images),
     heightMm: Math.max(MIN_FIGURE_HEIGHT_MM, finite(figure.heightMm, DEFAULT_FIGURE_HEIGHT_MM)),
+    faces: normalizeFaces(figure.faces),
   };
+}
+
+/** Reads the per-face widths and alignments, filling in anything missing or unusable. */
+function normalizeFaces(raw: unknown): Record<SideKey, FaceLayout> {
+  const saved = (raw ?? {}) as Partial<Record<SideKey, Partial<FaceLayout>>>;
+  const faces = defaultFaces();
+  for (const key of ['front', 'left', 'back'] as SideKey[]) {
+    const face = saved[key];
+    const width = finite(face?.widthMm, 0);
+    faces[key] = {
+      widthMm: width >= MIN_FACE_WIDTH_MM ? width : null,
+      align: Math.min(1, Math.max(0, finite(face?.align, DEFAULT_FACE.align))),
+    };
+  }
+  return faces;
 }
 
 /**

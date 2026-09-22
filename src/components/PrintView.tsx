@@ -8,11 +8,10 @@ import type {
   PackingMode,
   PaperSize,
   PrismLabel,
-  PrismLabelPlacement,
-  PrismWidths,
 } from '../types';
 import { LOW_DPI_WARNING, PAPER_SIZES_MM } from '../lib/constants';
-import { effectiveDpi } from '../lib/geometry';
+import { effectiveDpi, prismCloses, prismPanelWidths } from '../lib/geometry';
+import { PRISM_SIDES } from '../lib/sides';
 import { layoutPages } from '../lib/layout';
 import { buildPdf, downloadBlob, printPages, renderPrintPages } from '../lib/output';
 import { createPageCanvas, decodeFigureImages, renderPage } from '../lib/render';
@@ -42,6 +41,9 @@ export function PrintView() {
   const hasFlat = figures.some((f) => f.shape === 'flat');
   const lowResFigures = figures.filter((f) => effectiveDpi(f) < LOW_DPI_WARNING);
   const oversized = figures.filter((f) => layout.oversizedFigureIds.includes(f.id));
+  const unclosable = figures.filter(
+    (f) => f.shape === 'prism' && !prismCloses(prismPanelWidths(f, settings)),
+  );
 
   const exportPages = async (action: 'pdf' | 'print') => {
     setError(null);
@@ -165,15 +167,22 @@ export function PrintView() {
             {settings.prismLabel !== 'none' && (
               <>
                 <Field group label="Band on">
-                  <Segmented<PrismLabelPlacement>
-                    ariaLabel="Band on"
-                    value={settings.prismLabelPlacement}
-                    options={[
-                      { value: 'back', label: 'Back only' },
-                      { value: 'around', label: 'All faces' },
-                    ]}
-                    onChange={(prismLabelPlacement) => updateSettings({ prismLabelPlacement })}
-                  />
+                  <div className="band-sides">
+                    {PRISM_SIDES.map(({ key, label }) => (
+                      <label key={key} className="checkbox small">
+                        <input
+                          type="checkbox"
+                          checked={settings.prismBandSides[key]}
+                          onChange={(e) =>
+                            updateSettings({
+                              prismBandSides: { ...settings.prismBandSides, [key]: e.target.checked },
+                            })
+                          }
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
                 </Field>
                 <div className="field-row">
                   <Field label="Band height">
@@ -188,25 +197,19 @@ export function PrintView() {
                 </div>
               </>
             )}
-            <Field
-              group
-              label="Faces"
-              hint={
-                settings.prismWidths === 'auto'
-                  ? 'Each face is as wide as the artwork on it, so the tube follows the figure.'
-                  : 'All three faces share the widest, giving an evenly shaped tube.'
-              }
-            >
-              <Segmented<PrismWidths>
-                ariaLabel="Faces"
-                value={settings.prismWidths}
-                options={[
-                  { value: 'auto', label: 'Fit artwork' },
-                  { value: 'equal', label: 'Equal width' },
-                ]}
-                onChange={(prismWidths) => updateSettings({ prismWidths })}
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={settings.prismWidths === 'equal'}
+                onChange={(e) => updateSettings({ prismWidths: e.target.checked ? 'equal' : 'auto' })}
               />
-            </Field>
+              All three faces the same width
+            </label>
+            <p className="muted small">
+              {settings.prismWidths === 'equal'
+                ? 'Every face takes the widest one; narrower artwork keeps its place in the middle.'
+                : 'Each face is as wide as the artwork on it, so the tube follows the figure.'}
+            </p>
             <label className="checkbox">
               <input
                 type="checkbox"
@@ -316,21 +319,29 @@ export function PrintView() {
           </button>
         </div>
         {busy && <p className="muted small">{busy}</p>}
-        {error && <p className="warning-text small">{error}</p>}
+        {error && <p className="warning-note small">{error}</p>}
         <p className="muted small">Always print at 100 % / “actual size”. Check the calibration ruler after printing.</p>
 
-        {(oversized.length > 0 || lowResFigures.length > 0) && (
-          <div className="warnings">
+        {(oversized.length > 0 || unclosable.length > 0 || lowResFigures.length > 0) && (
+          <div className="warnings warning-note">
             {oversized.map((f) => (
-              <p key={f.id} className="warning-text">
+              <p key={f.id}>
                 <button type="button" className="link" onClick={() => openFigure(f.id)}>
                   {f.name || 'Unnamed'}
                 </button>{' '}
                 does not fit on one sheet and is skipped.
               </p>
             ))}
+            {unclosable.map((f) => (
+              <p key={f.id}>
+                <button type="button" className="link" onClick={() => openFigure(f.id)}>
+                  {f.name || 'Unnamed'}
+                </button>{' '}
+                has one face wider than the other two together, so its tube cannot be closed.
+              </p>
+            ))}
             {lowResFigures.map((f) => (
-              <p key={f.id} className="warning-text">
+              <p key={f.id}>
                 <button type="button" className="link" onClick={() => openFigure(f.id)}>
                   {f.name || 'Unnamed'}
                 </button>{' '}

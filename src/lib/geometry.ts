@@ -1,6 +1,6 @@
 import type { Figure, FigureSide, Settings, SideKey } from '../types';
 import { GLUE_TAB_MM, MIN_FIGURE_HEIGHT_MM, MM_PER_INCH, PAPER_SIZES_MM } from './constants';
-import { figureSides, isQuarterTurned, mirrored, printedSides, sideAspect } from './sides';
+import { figureSides, isQuarterTurned, printedSides, PRISM_SIDES, sideAspect } from './sides';
 
 /** Printed size of one piece of artwork at the given height. */
 export function sideSize(side: FigureSide, heightMm: number): { width: number; height: number } {
@@ -30,46 +30,75 @@ export function glueTabMm(settings: Settings): number {
   return settings.glueTab ? GLUE_TAB_MM : 0;
 }
 
-/** Height of the band along the bottom of a prism. Zero when nothing is printed there. */
+/** Height of the band along the bottom of a prism. Zero when nothing is printed on any face. */
 export function prismBandMm(settings: Settings): number {
-  return settings.prismLabel === 'none' ? 0 : settings.prismLabelHeightMm;
+  const anywhere = PRISM_SIDES.some(({ key }) => settings.prismBandSides[key]);
+  return settings.prismLabel === 'none' || !anywhere ? 0 : settings.prismLabelHeightMm;
 }
 
 /**
- * Printed width of the three faces of a prism: front right (the main image), front left (its own
- * artwork, or the main image mirrored) and back. A face without artwork of its own takes the main
- * image's width. 'equal' squares the tube off by giving every face the widest.
+ * Width the artwork on one face takes, before any manual width is applied. A face left blank still needs
+ * a width to stand on, and takes the main image's.
+ */
+export function faceArtworkWidthMm(
+  figure: Pick<Figure, 'front' | 'back' | 'left' | 'heightMm'>,
+  key: SideKey,
+): number {
+  // A face without artwork of its own is as wide as the main image: Side B mirrors it, Side C is blank.
+  const side = figure[key] ?? figure.front;
+  return sideSize(side, figure.heightMm).width;
+}
+
+/**
+ * Printed width of each face of a prism. A face is as wide as its artwork, or wider if a width was
+ * typed in for it; with `prismWidths: 'equal'` all three take the widest of those, and the artwork sits
+ * in the extra space according to the face's alignment.
  */
 export function prismPanelWidths(
-  figure: Pick<Figure, 'front' | 'back' | 'left' | 'heightMm'>,
+  figure: Pick<Figure, 'front' | 'back' | 'left' | 'heightMm' | 'faces'>,
   settings: Settings,
-): { right: number; left: number; back: number } {
-  const width = (side: Figure['front'] | null) => (side ? sideSize(side, figure.heightMm).width : right);
-  const right = sideSize(figure.front, figure.heightMm).width;
-  const left = width(figure.left);
-  const back = width(figure.back);
-  if (settings.prismWidths === 'equal') {
-    const widest = Math.max(right, left, back);
-    return { right: widest, left: widest, back: widest };
-  }
-  return { right, left, back };
+): Record<SideKey, number> {
+  const own = (key: SideKey) => Math.max(faceArtworkWidthMm(figure, key), figure.faces[key].widthMm ?? 0);
+  const widths = { front: own('front'), left: own('left'), back: own('back') };
+  if (settings.prismWidths !== 'equal') return widths;
+  const widest = Math.max(widths.front, widths.left, widths.back);
+  return { front: widest, left: widest, back: widest };
 }
 
 /**
- * The faces of a prism in the order they are printed, left to right: front right (the main image) and
- * front left side by side, so the figure's front edge is a plain fold, then the back. The glue tab, if
- * any, follows the back and closes the tube there. `side` is null for a back face left blank.
+ * Whether the three faces can actually be folded into a tube. Two faces have to reach across the third,
+ * so the widest one has to stay narrower than the other two together -- the triangle inequality. A face
+ * made very wide, by its artwork or by hand, leaves the other two too short to meet and be glued.
  */
-export function prismFaces(
-  figure: Pick<Figure, 'front' | 'back' | 'left' | 'heightMm'>,
+export function prismCloses(widths: Record<SideKey, number>): boolean {
+  const sides = [widths.front, widths.left, widths.back];
+  const widest = Math.max(...sides);
+  const others = sides.reduce((sum, width) => sum + width, 0) - widest;
+  // A hair of margin: faces that only just meet leave a flat triangle with nothing to glue.
+  return others > widest + 0.5;
+}
+
+/**
+ * The faces of a prism in the order they are printed, left to right: Side A (the main image) and Side B
+ * side by side, so the figure's front edge is a plain fold, then Side C. The glue tab, if any, follows
+ * Side C and closes the tube there. `side` is null for a face left blank.
+ */
+export function prismStrip(
+  figure: Pick<Figure, 'front' | 'back' | 'left' | 'heightMm' | 'faces'>,
   settings: Settings,
-): { key: SideKey; x: number; width: number; side: FigureSide | null }[] {
+): { key: SideKey; x: number; width: number; align: number; side: FigureSide | null }[] {
   const widths = prismPanelWidths(figure, settings);
-  return [
-    { key: 'front', x: 0, width: widths.right, side: figure.front },
-    { key: 'left', x: widths.right, width: widths.left, side: figure.left ?? mirrored(figure.front) },
-    { key: 'back', x: widths.right + widths.left, width: widths.back, side: figure.back },
-  ];
+  const sides: Record<SideKey, FigureSide | null> = {
+    front: figure.front,
+    left: figure.left,
+    back: figure.back,
+  };
+  let x = 0;
+  return PRISM_SIDES.map(({ key }) => {
+    const face = { key, x, width: widths[key], align: figure.faces[key].align, side: sides[key] };
+    x += widths[key];
+    return face;
+  });
 }
 
 /**
@@ -84,16 +113,18 @@ export function prismFaces(
  *   +-----------+
  */
 export function cardSize(
-  figure: Pick<Figure, 'shape' | 'front' | 'back' | 'left' | 'heightMm'>,
+  figure: Pick<Figure, 'shape' | 'front' | 'back' | 'left' | 'heightMm' | 'faces'>,
   settings: Settings,
 ): { width: number; height: number } {
   if (figure.shape === 'prism') {
     // One strip of three faces, closed into a triangular tube. No fold at the top, no base strip.
-    const { right, left, back } = prismPanelWidths(figure, settings);
-    return { width: right + left + back + glueTabMm(settings), height: figure.heightMm + prismBandMm(settings) };
+    const widths = prismPanelWidths(figure, settings);
+    const total = widths.front + widths.left + widths.back;
+    return { width: total + glueTabMm(settings), height: figure.heightMm + prismBandMm(settings) };
   }
   return {
-    width: Math.max(widestSideMm(figure), settings.minWidthMm),
+    // A width set by hand widens the card the same way the stand minimum does.
+    width: Math.max(widestSideMm(figure), settings.minWidthMm, figure.faces.front.widthMm ?? 0),
     height: 2 * (figure.heightMm + settings.baseHeightMm) + flapHeightMm(settings),
   };
 }
@@ -120,7 +151,7 @@ export function footerReserveMm(settings: Settings): number {
  * The card width is max(imageWidth, minWidth), so both constraints are checked separately.
  */
 export function maxFigureHeightMm(
-  figure: Pick<Figure, 'shape' | 'front' | 'back' | 'left'>,
+  figure: Pick<Figure, 'shape' | 'front' | 'back' | 'left' | 'faces'>,
   settings: Settings,
 ): number {
   const area = printableArea(settings);
@@ -130,10 +161,12 @@ export function maxFigureHeightMm(
 }
 
 /** Largest height of a flat card that fits into the given space. */
-function flatFit(figure: Pick<Figure, 'front' | 'back'>, settings: Settings) {
+function flatFit(figure: Pick<Figure, 'front' | 'back' | 'faces'>, settings: Settings) {
   const aspect = Math.max(...figureSides(figure).map(sideAspect));
+  // Neither the stand minimum nor a width set by hand shrinks with the figure.
+  const fixedWidth = Math.max(settings.minWidthMm, figure.faces.front.widthMm ?? 0);
   return (availWidth: number, availHeight: number) => {
-    if (settings.minWidthMm > availWidth) return 0;
+    if (fixedWidth > availWidth) return 0;
     const byHeight = (availHeight - flapHeightMm(settings)) / 2 - settings.baseHeightMm;
     const byWidth = availWidth / aspect;
     return Math.max(0, Math.min(byHeight, byWidth));
@@ -141,22 +174,26 @@ function flatFit(figure: Pick<Figure, 'front' | 'back'>, settings: Settings) {
 }
 
 /**
- * Largest height of a prism that fits. Its width grows linearly with the height
- * (two side faces plus the back face), with the glue tab added on top as a constant.
+ * Largest height of a prism that fits. A width typed in by hand does not shrink with the height, so the
+ * card's width is not a plain multiple of it; the largest fitting height is found by bisection instead.
  */
-function prismFit(figure: Pick<Figure, 'front' | 'back' | 'left'>, settings: Settings) {
-  const frontAspect = sideAspect(figure.front);
-  const backAspect = figure.back ? sideAspect(figure.back) : frontAspect;
-  const leftAspect = figure.left ? sideAspect(figure.left) : frontAspect;
-  const widthPerMm =
-    settings.prismWidths === 'equal'
-      ? 3 * Math.max(frontAspect, backAspect, leftAspect)
-      : frontAspect + backAspect + leftAspect;
-  const tab = glueTabMm(settings);
+function prismFit(figure: Pick<Figure, 'front' | 'back' | 'left' | 'faces'>, settings: Settings) {
+  const widthAt = (heightMm: number) => {
+    const widths = prismPanelWidths({ ...figure, heightMm }, settings);
+    return widths.front + widths.left + widths.back + glueTabMm(settings);
+  };
   return (availWidth: number, availHeight: number) => {
-    const byWidth = (availWidth - tab) / widthPerMm;
     const byHeight = availHeight - prismBandMm(settings);
-    return Math.max(0, Math.min(byHeight, byWidth));
+    if (byHeight <= 0 || widthAt(0) > availWidth) return 0;
+    if (widthAt(byHeight) <= availWidth) return byHeight;
+    let low = 0;
+    let high = byHeight;
+    for (let i = 0; i < 30; i++) {
+      const mid = (low + high) / 2;
+      if (widthAt(mid) <= availWidth) low = mid;
+      else high = mid;
+    }
+    return low;
   };
 }
 

@@ -1,10 +1,11 @@
 import type { Figure, Settings, SideKey, StoredImage } from '../types';
-import { GLUE_TAB_TAPER_MM, MM_PER_INCH, PAPER_SIZES_MM } from './constants';
+import { MM_PER_INCH, PAPER_SIZES_MM } from './constants';
 import { figureColorHex, readableTextColor } from './colors';
-import { figureImageSize, flapHeightMm, glueTabMm, prismBandMm, prismFaces, sideSize } from './geometry';
+import { figureImageSize, flapHeightMm, glueTabMm, prismBandMm, prismStrip, sideSize } from './geometry';
 import { loadImageElement } from './image';
 import { applyTransform, figureImageIds, flatBack, isQuarterTurned } from './sides';
 import type { PageLayout, PlacedCard } from './layout';
+import { cardCutSegments, mergeCutSegments, type CutSegment } from './cutlines';
 
 const FONT_FAMILY = 'system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 const CUT_LINE_COLOR = '#808080';
@@ -106,8 +107,15 @@ export function renderPage(
     ctx.restore();
   }
 
+  // Cut lines go on last and for the page as a whole, so an edge two cards share is drawn once.
+  const cuts = page.cards.flatMap((card) => {
+    const figure = byId.get(card.figureId);
+    return figure ? cardCutSegments(card, figure, settings) : [];
+  });
+
   ctx.save();
   ctx.scale(pxPerMm, pxPerMm);
+  drawCutSegments(ctx, mergeCutSegments(cuts), settings);
   drawFooter(ctx, paper.width, paper.height, settings, pageIndex, pageCount, pxPerMm);
   ctx.restore();
 }
@@ -135,7 +143,9 @@ function drawCard(
   const frontBaseY = foldY + image.height;
   const flapY = frontBaseY + base;
   const flap = flapHeightMm(settings);
-  const imageX = (cardWidth - image.width) / 2;
+  // The card can be wider than the artwork; `align` says where it sits, 0.5 being the middle.
+  const align = figure.faces.front.align;
+  const imageX = (cardWidth - image.width) * align;
 
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, cardWidth, cardHeight);
@@ -154,7 +164,9 @@ function drawCard(
   ctx.save();
   ctx.translate(cardWidth, foldY);
   ctx.scale(-1, -1);
-  ctx.translate((cardWidth - backSize.width) / 2, 0);
+  // Mirrored by the turn, so the offset is counted from the other end and the halves stay on top of
+  // each other once the card is folded.
+  ctx.translate((cardWidth - backSize.width) * (1 - align), 0);
   drawSideArtwork(ctx, back, decoded.get(back.imageId), backSize.width, backSize.height);
   ctx.restore();
 
@@ -179,17 +191,16 @@ function drawCard(
     drawFoldLine(ctx, cardWidth, flapY, settings);
     drawFlapHint(ctx, cardWidth, flapY, flap, pxPerMm);
   }
-  drawCutLines(ctx, cardWidth, cardHeight, settings);
 }
 
 /**
  * Draws one unfolded prism: three faces in a row that fold into a triangular tube, plus an optional
- * glue tab. The two front faces sit next to each other, so the front edge of the figure is a clean fold
- * and the glued seam ends up at the back. Front right carries the main image; front left carries its
- * own artwork, or the main image mirrored, so the figure faces the viewer from either side of the edge.
+ * glue tab. Side A and Side B sit next to each other, so the front edge of the figure is a clean fold
+ * and the glued seam ends up behind it. Side A carries the main image; the other two carry their own
+ * artwork, or stay blank.
  *
- *   | front right | front left  |    back    |\ tab
- *   |   (main)    | (own/mirror)|  (back)    |/
+ *   |   Side A    |   Side B    |   Side C   |\ tab
+ *   |   (main)    |             |            |/
  *   +-------------+------------+-------------+
  *   |            band along the bottom       |
  */
@@ -202,7 +213,7 @@ function drawPrismCard(
   pxPerMm: number,
 ): void {
   const { width: cardWidth, height: cardHeight } = card;
-  const faces = prismFaces(figure, settings);
+  const faces = prismStrip(figure, settings);
   const band = prismBandMm(settings);
   const artHeight = figure.heightMm;
   const tab = glueTabMm(settings);
@@ -215,7 +226,8 @@ function drawPrismCard(
     const art = sideSize(face.side, artHeight);
     ctx.save();
     // Mirroring is part of the side's own transform now, so every face is drawn the same way.
-    ctx.translate(face.x + (face.width - art.width) / 2, 0);
+    // A face wider than its artwork keeps the spare room at the sides, split by the face's alignment.
+    ctx.translate(face.x + (face.width - art.width) * face.align, 0);
     drawSideArtwork(ctx, face.side, decoded.get(face.side.imageId), art.width, art.height);
     ctx.restore();
   }
@@ -226,7 +238,6 @@ function drawPrismCard(
   const last = faces[faces.length - 1];
   const foldXs = [...faces.slice(1).map((face) => face.x), ...(tab > 0 ? [last.x + last.width] : [])];
   for (const x of foldXs) drawVerticalFoldLine(ctx, x, cardHeight, settings);
-  drawPrismOutline(ctx, cardWidth, cardHeight, tab, settings);
 }
 
 /** The coloured band along the bottom of a prism, and the name and info printed in it. */
@@ -241,9 +252,7 @@ function drawPrismBand(
   pxPerMm: number,
 ): void {
   const colorHex = figureColorHex(figure);
-  const onlyBack = settings.prismLabelPlacement === 'back';
-  // Picked by name, not position: the order of the faces on the strip is not the back's business.
-  const painted = onlyBack ? faces.filter((face) => face.key === 'back') : faces;
+  const painted = faces.filter((face) => settings.prismBandSides[face.key]);
 
   for (const face of painted) {
     ctx.save();
@@ -296,6 +305,22 @@ function drawBandText(
   ctx.restore();
 }
 
+/** Draws the page's cut lines, already merged, in the chosen style. */
+function drawCutSegments(ctx: CanvasRenderingContext2D, segments: CutSegment[], settings: Settings): void {
+  if (segments.length === 0) return;
+  ctx.save();
+  ctx.strokeStyle = CUT_LINE_COLOR;
+  ctx.lineWidth = LINE_WIDTH_MM;
+  if (settings.cutLines === 'dashed') ctx.setLineDash([2, 1.5]);
+  ctx.beginPath();
+  for (const segment of segments) {
+    ctx.moveTo(segment.x1, segment.y1);
+    ctx.lineTo(segment.x2, segment.y2);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawVerticalFoldLine(ctx: CanvasRenderingContext2D, x: number, height: number, settings: Settings): void {
   if (settings.foldLine === 'none') return;
   ctx.save();
@@ -312,54 +337,6 @@ function drawVerticalFoldLine(ctx: CanvasRenderingContext2D, x: number, height: 
     if (settings.foldLine === 'dashed') ctx.setLineDash([1.5, 1.2]);
     ctx.moveTo(x, 0);
     ctx.lineTo(x, height);
-  }
-  ctx.stroke();
-  ctx.restore();
-}
-
-/** Cut outline of a prism: a rectangle, with the glue tab tapering off the right-hand end. */
-function drawPrismOutline(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  tab: number,
-  settings: Settings,
-): void {
-  if (settings.cutLines === 'none') return;
-  const inset = LINE_WIDTH_MM / 2;
-  const right = width - inset;
-  const bodyRight = tab > 0 ? width - tab : right;
-  const taper = tab > 0 ? Math.min(GLUE_TAB_TAPER_MM, height / 4) : 0;
-
-  ctx.save();
-  ctx.strokeStyle = CUT_LINE_COLOR;
-  ctx.lineWidth = LINE_WIDTH_MM;
-  if (settings.cutLines === 'dashed') ctx.setLineDash([2, 1.5]);
-  ctx.beginPath();
-  if (settings.cutLines === 'corners') {
-    const len = Math.min(4, width / 4, height / 4);
-    for (const [cx, cy, dx, dy] of [
-      [inset, inset, 1, 1],
-      [right, inset, -1, 1],
-      [inset, height - inset, 1, -1],
-      [right, height - inset, -1, -1],
-    ]) {
-      ctx.moveTo(cx + dx * len, cy);
-      ctx.lineTo(cx, cy);
-      ctx.lineTo(cx, cy + dy * len);
-    }
-  } else {
-    ctx.moveTo(inset, inset);
-    ctx.lineTo(bodyRight, inset);
-    if (tab > 0) {
-      ctx.lineTo(right, inset + taper);
-      ctx.lineTo(right, height - inset - taper);
-      ctx.lineTo(bodyRight, height - inset);
-    } else {
-      ctx.lineTo(right, height - inset);
-    }
-    ctx.lineTo(inset, height - inset);
-    ctx.closePath();
   }
   ctx.stroke();
   ctx.restore();
@@ -497,37 +474,6 @@ function drawFoldLine(ctx: CanvasRenderingContext2D, width: number, y: number, s
     if (settings.foldLine === 'dashed') ctx.setLineDash([1.5, 1.2]);
     ctx.moveTo(0, y);
     ctx.lineTo(width, y);
-  }
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawCutLines(ctx: CanvasRenderingContext2D, width: number, height: number, settings: Settings): void {
-  if (settings.cutLines === 'none') return;
-  ctx.save();
-  ctx.strokeStyle = CUT_LINE_COLOR;
-  ctx.lineWidth = LINE_WIDTH_MM;
-  const inset = LINE_WIDTH_MM / 2;
-  const x0 = inset;
-  const y0 = inset;
-  const x1 = width - inset;
-  const y1 = height - inset;
-  ctx.beginPath();
-  if (settings.cutLines === 'corners') {
-    const len = Math.min(4, width / 4, height / 4);
-    for (const [cx, cy, dx, dy] of [
-      [x0, y0, 1, 1],
-      [x1, y0, -1, 1],
-      [x0, y1, 1, -1],
-      [x1, y1, -1, -1],
-    ]) {
-      ctx.moveTo(cx + dx * len, cy);
-      ctx.lineTo(cx, cy);
-      ctx.lineTo(cx, cy + dy * len);
-    }
-  } else {
-    if (settings.cutLines === 'dashed') ctx.setLineDash([2, 1.5]);
-    ctx.rect(x0, y0, x1 - x0, y1 - y0);
   }
   ctx.stroke();
   ctx.restore();

@@ -1,4 +1,13 @@
-import type { CropRect, Figure, FigureSide, ImageTransform, StoredImage } from '../types';
+import type {
+  CropRect,
+  FaceLayout,
+  Figure,
+  FigureShape,
+  FigureSide,
+  ImageTransform,
+  SideKey,
+  StoredImage,
+} from '../types';
 
 /** Untransformed orientation: no rotation, no mirroring. */
 export const IDENTITY_TRANSFORM: ImageTransform = { quarterTurns: 0, flipX: false, flipY: false };
@@ -74,4 +83,47 @@ export function applyTransform(
 /** The full image as a crop, used when a side has no meaningful crop of its own. */
 export function fullCrop(image: Pick<StoredImage, 'width' | 'height'>): CropRect {
   return { x: 0, y: 0, width: image.width, height: image.height };
+}
+
+/** A face that simply follows its artwork, centred. */
+export const DEFAULT_FACE: FaceLayout = { widthMm: null, align: 0.5 };
+
+/** Face layouts for a new figure. */
+export function defaultFaces(): Record<SideKey, FaceLayout> {
+  return { front: { ...DEFAULT_FACE }, left: { ...DEFAULT_FACE }, back: { ...DEFAULT_FACE } };
+}
+
+/** The three faces of a prism in the order they are printed, with the label shown for each. */
+export const PRISM_SIDES: { key: SideKey; label: string }[] = [
+  { key: 'front', label: 'Side A' },
+  { key: 'left', label: 'Side B' },
+  { key: 'back', label: 'Side C' },
+];
+
+/**
+ * The face whose artwork has to move with this one, or null when it moves alone.
+ *
+ * A flat mini's two halves fold onto each other, so they only line up while they move together. A prism's
+ * Side A and Side B meet at the figure's front edge, and Side B is usually Side A mirrored; Side C has no
+ * such partner.
+ */
+export function alignPartner(shape: FigureShape, which: SideKey): SideKey | null {
+  if (shape === 'flat') return which === 'front' ? 'back' : 'front';
+  if (which === 'front') return 'left';
+  return which === 'left' ? 'front' : null;
+}
+
+/**
+ * Where both faces end up when one of them is moved.
+ *
+ * The partner is mirrored rather than shifted the same way along the strip: the two meet at a fold, so
+ * staying the same distance from that fold means opposite directions once the paper is folded.
+ */
+export function linkedFaceAligns(
+  shape: FigureShape,
+  which: SideKey,
+  align: number,
+): Partial<Record<SideKey, number>> {
+  const partner = alignPartner(shape, which);
+  return partner ? { [which]: align, [partner]: 1 - align } : { [which]: align };
 }

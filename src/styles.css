@@ -155,6 +155,34 @@ input[type='range'] {
 .warning-text {
   color: var(--warning);
 }
+/* Beside a reading rather than under it: the same block, kept low enough not to break the line. */
+.warning-note.inline {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-left-width: 2px;
+  font-weight: 400;
+}
+
+/* Warnings that stand on their own line get a block, so they are not just differently coloured text. */
+.warning-note {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  border-left: 3px solid var(--warning);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin: 0;
+}
+.warning-note p {
+  margin: 0;
+}
+.warning-note p + p {
+  margin-top: 6px;
+}
+.warning-note .link {
+  color: inherit;
+  text-decoration-color: currentColor;
+}
 
 .size-print {
   color: var(--print-size);
@@ -935,11 +963,22 @@ input[type='range'] {
 .size-limit {
   margin: -4px 0 0;
 }
+/* A box needs its own room; the pull-up is only for the plain note. */
+.size-limit.warning-note {
+  margin: 0;
+}
 .facts {
+  /* Three short readings that belong together, so they sit on one line, label beside value. */
   display: flex;
-  gap: 24px;
+  align-items: baseline;
+  gap: 6px 18px;
   flex-wrap: wrap;
   margin: 0;
+}
+.facts > div {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
 .facts dt {
   font-size: 0.75rem;
@@ -1005,11 +1044,7 @@ input[type='range'] {
   padding: 8px 10px;
 }
 .warnings {
-  border-top: 1px solid var(--border);
-  padding-top: 8px;
-}
-.warnings p {
-  margin: 4px 0;
+  margin-top: 4px;
 }
 .print-preview {
   display: flex;
@@ -1109,6 +1144,60 @@ input[type='range'] {
   min-width: 100%;
 }
 
+/* A prism face on the stage: the artwork sits in the face that gets printed around it. */
+.face-artwork {
+  position: relative;
+  touch-action: none;
+}
+/* Marked out at all times, so the three faces of the tube can be seen and compared. */
+.face-artwork.showing {
+  border-left: 1px dashed var(--border);
+  border-right: 1px dashed var(--border);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.stage-column.selected .face-artwork.showing {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.face-artwork.movable {
+  cursor: ew-resize;
+}
+.face-artwork-inner {
+  position: absolute;
+  bottom: 0;
+}
+
+/* Which faces carry the band: one checkbox each, across the settings column. */
+.band-sides {
+  display: flex;
+  gap: 4px 14px;
+  flex-wrap: wrap;
+}
+
+/* The three face widths of a prism, on one line under the stage they belong to. */
+.face-widths {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+.face-width-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* Level with the inputs beside them, not with their labels. */
+  padding-top: 16px;
+}
+.face-width-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.face-width-label button:disabled {
+  /* Already centred: still readable, but plainly not something to press. */
+  opacity: 0.4;
+}
+
 /* ---------- Artwork editor (one side at a time, behind tabs) ---------- */
 
 .artwork-editor {
@@ -1122,7 +1211,7 @@ input[type='range'] {
   border-bottom: 1px solid var(--border);
 }
 .artwork-tab {
-  /* Sized by their labels, then stretched to fill the row, so "Front right" gets the room it needs. */
+  /* Sized by their labels, then stretched to fill the row, so each gets the room it needs. */
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
