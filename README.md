@@ -75,7 +75,8 @@ No glue at hand? Switch the tab off and close the tube with a piece of tape.
   marks at the folds, or nothing — on whichever of the three faces you pick. Face widths can be set by
   hand or kept equal, with a warning when one face grows too wide for the tube to close.
 - **Two layouts** on A5, A4, A3, US Letter, US Legal or Tabloid: *Easy to cut* (straight cuts only) or *Save paper* (tight packing).
-- **In-game size** of every figure in metres and feet (Small 1 m, Medium 1.8 m, Large 3–5 m, Huge 5–10 m, Gargantuan 10 m+).
+- **In-game size** of every figure in metres and feet (Small 1 m / 3.28 ft, Medium 1.8 m / 5.91 ft,
+  Large 3–5 m / 9.84–16.4 ft, Huge 5–10 m / 16.4–32.81 ft, Gargantuan 10 m+ / 32.81 ft+).
 - **Base styles** for flat minis: for plastic stands or as a folded paper foot.
 - **Cut and fold line styles**: solid, dashed, corner marks, edge ticks or none.
 - **PDF download or direct printing**, with a live preview, page numbers and a calibration ruler.
