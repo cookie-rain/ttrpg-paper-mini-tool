@@ -39,6 +39,13 @@ const DEFAULT_LABEL_WIDTH_PX = 110;
 /** Space kept free between neighbouring labels. */
 const LABEL_SPACING_PX = 8;
 /**
+ * A label may be squeezed to this before the drawing is made to give way instead. The gap between items
+ * exists only to hold the labels apart, so at any scale the row needs at least one label width per item:
+ * below that width no scale fits at all and the drawing drops to its floor, however much height it has.
+ */
+const MIN_LABEL_WIDTH_PX = 72;
+
+/**
  * Below this the stage is too narrow to spend a whole column on naming the reference lines: the lines
  * stay, their labels go, and the figures get the width back.
  */
@@ -120,6 +127,9 @@ export function Stage({
   const gridPatternId = `stage-grid-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const [available, setAvailable] = useState({ width: 800, height: 400 });
   const [labelsWidth, setLabelsWidth] = useState(0);
+  /** Height the item labels actually take, which grows once they are narrow enough to wrap. */
+  const [labelRowMeasuredPx, setLabelRowMeasuredPx] = useState(0);
+  const labelRef = useRef<HTMLDivElement>(null);
   const [scroll, setScroll] = useState({ left: 0, visible: 1, total: 1 });
 
   const updateScroll = useCallback(() => {
@@ -149,15 +159,14 @@ export function Stage({
       const container = containerRef.current;
       if (container) setAvailable({ width: container.clientWidth, height: container.clientHeight });
       setLabelsWidth(labelsRef.current?.offsetWidth ?? 0);
+      setLabelRowMeasuredPx(labelRef.current?.offsetHeight ?? 0);
       updateScroll();
     });
-    for (const el of [containerRef.current, labelsRef.current, scrollRef.current?.firstElementChild]) {
+    for (const el of [containerRef.current, labelsRef.current, labelRef.current, scrollRef.current?.firstElementChild]) {
       if (el) observer.observe(el);
     }
     return () => observer.disconnect();
   }, [updateScroll, referenceLines.length]);
-
-  const resolveGap = (widths: number[]) => stageGap(widths, minGapPx, labelWidthPx, fixedGapPx);
 
   const showLineLabels = referenceLines.length > 0 && available.width >= LINE_LABELS_FROM_PX;
   const labelsColumnPx = showLineLabels ? labelsWidth : 0;
@@ -167,8 +176,19 @@ export function Stage({
   const tallest = Math.max(10, ...allItems.map((item) => item.heightMm), ...requiredLines.map((line) => line.heightMm));
   // With fit="all" nothing scrolls, so no room is needed for the scrollbar.
   const scrollbarSpace = fit === 'all' ? 0 : SCROLLBAR_ALLOWANCE_PX;
-  const byHeight = (available.height - labelHeight - scrollbarSpace) / (tallest * HEADROOM);
   const freeWidth = available.width - labelsColumnPx - EDGE_PADDING_PX;
+  /** Width the items are fitted into, which is what decides how wide their labels may be. */
+  const itemAreaPx =
+    fit === 'all' && leadingBehind
+      ? Math.max(0, Math.min(freeWidth - EDGE_PADDING_PX - SCROLL_SAFETY_PX, available.width * itemAreaShare))
+      : freeWidth;
+  const labelWidth = fittingLabelWidth(itemAreaPx, items.length, labelWidthPx);
+  // A narrowed label wraps further lines, and how many depends on the text and the font rather than on
+  // anything we could work out here, so the row is measured. It cannot feed back into its own width: the
+  // labels are sized from the width alone, never from the height they end up taking.
+  const labelRowPx = Math.max(labelHeight, labelRowMeasuredPx);
+  const resolveGap = (widths: number[]) => stageGap(widths, minGapPx, labelWidth, fixedGapPx);
+  const byHeight = (available.height - labelRowPx - scrollbarSpace) / (tallest * HEADROOM);
   let byWidth = MAX_PX_PER_MM;
   let overlapMm = leading?.trailingOverlapMm ?? 0;
   /** Width the row may take without the area scrolling; the padding has to come out of it as well. */
@@ -178,8 +198,7 @@ export function Stage({
     // Whatever the row ends up holding has to fit the area exactly: a scrollbar here would not only look
     // wrong, it would also steal height from the drawing area below.
     roomPx = freeWidth - EDGE_PADDING_PX - SCROLL_SAFETY_PX;
-    const budget = Math.max(0, Math.min(roomPx, available.width * itemAreaShare));
-    ({ scale: byWidth } = fitAll(undefined, items, budget, byHeight, resolveGap, labelWidthPx, false, centerItems));
+    ({ scale: byWidth } = fitAll(undefined, items, itemAreaPx, byHeight, resolveGap, labelWidth, false, centerItems));
     overlapMm = 0;
   } else if (fit === 'all') {
     // Centred items need a box that does not move: a growing overlap would drag the middle left with it.
@@ -189,7 +208,7 @@ export function Stage({
       freeWidth,
       byHeight,
       resolveGap,
-      labelWidthPx,
+      labelWidth,
       !centerItems,
       centerItems,
     ));
@@ -210,8 +229,8 @@ export function Stage({
   const gapPx = resolveGap(itemWidthsPx);
   const last = itemWidthsPx[itemWidthsPx.length - 1] ?? 0;
   // Labels may be wider than their image; pad the ends so the first and last label are not cut off.
-  const firstPadPx = Math.max(0, (labelWidthPx - (itemWidthsPx[0] ?? 0)) / 2);
-  const lastPadPx = Math.max(0, (labelWidthPx - last) / 2);
+  const firstPadPx = Math.max(0, (labelWidth - (itemWidthsPx[0] ?? 0)) / 2);
+  const lastPadPx = Math.max(0, (labelWidth - last) / 2);
   // Centring only reads as centred when both ends are padded the same, whatever the items measure.
   const padStartPx = centerItems ? Math.max(firstPadPx, lastPadPx) : firstPadPx;
   const padEndPx = centerItems ? padStartPx : lastPadPx;
@@ -228,7 +247,7 @@ export function Stage({
   // The drawing area is exactly the height left above the labels: it fills it, so the grid continues
   // upwards above the tallest item rather than leaving a gap, and never exceeds it, which would push
   // the labels out of the stage and cut them off. Anything taller than that is clipped at the top.
-  const drawHeight = Math.max(0, available.height - labelHeight - scrollbarSpace);
+  const drawHeight = Math.max(0, available.height - labelRowPx - scrollbarSpace);
   const overlapPx = overlapMm * pxPerMm;
   const visibleLines = pickVisibleLines(referenceLines, pxPerMm, drawHeight);
   const fadeLeft = scroll.left > 1;
@@ -236,7 +255,8 @@ export function Stage({
 
   // Each column is exactly as wide as its image, so the gap between images is uniform.
   // The label is centred under the image and may extend into the gap.
-  const renderColumn = (item: StageItem, widthPx: number, labelWidth: number) => (
+  // The backdrop labels itself across its own width; the items share the width worked out above.
+  const renderColumn = (item: StageItem, widthPx: number, columnLabelWidth = labelWidth, measured = false) => (
     <div
       key={item.key}
       className={`stage-column ${item.kind} ${item.selected ? 'selected' : ''} ${item.onClick ? 'clickable' : ''}`}
@@ -247,7 +267,12 @@ export function Stage({
       </div>
       <div
         className="stage-label"
-        style={{ minHeight: labelHeight, width: labelWidth, marginLeft: (widthPx - labelWidth) / 2 }}
+        ref={measured ? labelRef : undefined}
+        style={{
+          minHeight: labelRowPx,
+          width: columnLabelWidth,
+          marginLeft: (widthPx - columnLabelWidth) / 2,
+        }}
       >
         {item.label}
       </div>
@@ -312,7 +337,7 @@ export function Stage({
                 paddingRight: padEndPx + EDGE_PADDING_PX,
               }}
             >
-              {items.map((item, index) => renderColumn(item, itemWidthsPx[index], labelWidthPx))}
+              {items.map((item, index) => renderColumn(item, itemWidthsPx[index], labelWidth, index === 0))}
             </div>
           </div>
           {scroll.total > scroll.visible + 2 && (
@@ -431,6 +456,21 @@ function LineLabel({ line }: { line: ReferenceLine }) {
 }
 
 /**
+ * Label width the items can be given without the row overflowing, capped at the nominal width.
+ *
+ * The gap between two items only exists to hold their labels apart, so one label width per item plus
+ * the spacing between them is the width the row takes however small the items themselves are drawn.
+ * Keeping the labels at their nominal width on a narrow stage therefore does not squeeze the figures,
+ * it collapses them: no scale fits, and the drawing drops to its floor however much height it has.
+ * Narrowing the labels instead lets them wrap and leaves the drawing to use the space it has.
+ */
+export function fittingLabelWidth(itemAreaPx: number, itemCount: number, nominalPx: number): number {
+  if (itemCount <= 0) return nominalPx;
+  const fits = (itemAreaPx - LABEL_SPACING_PX * (itemCount - 1)) / itemCount;
+  return Math.max(MIN_LABEL_WIDTH_PX, Math.min(nominalPx, fits));
+}
+
+/**
  * The gap between neighbouring items, following whichever is wider: the images or their labels.
  * It never drops below `fixedGap`, so wide images keep a steady distance while being resized, and it
  * opens up beyond that only when narrow images would otherwise let two labels touch.
@@ -492,7 +532,11 @@ function fitAll(
   const neededOverlap = baseOverlap + (widthAt(target, baseOverlap) - availableWidth) / target;
   if (neededOverlap <= maxOverlap) return { scale: MAX_PX_PER_MM, overlapMm: neededOverlap };
 
-  // Still too wide: use the maximum overlap and find the largest fitting scale (width grows with scale).
+  // Still too wide: use the maximum overlap and find the largest fitting scale. The width never falls as
+  // the scale rises, so a bisection is sound — but it is flat over a long stretch at the low end, where
+  // the gap gives back exactly what the items gain. The row has a smallest width it takes at any scale,
+  // and if the area is under it nothing fits: that floor is almost all label, which is why the labels are
+  // narrowed first (see fittingLabelWidth) rather than left to drag the drawing down here.
   let low = MIN_PX_PER_MM_FIT_ALL;
   let high = target;
   for (let i = 0; i < 24; i++) {

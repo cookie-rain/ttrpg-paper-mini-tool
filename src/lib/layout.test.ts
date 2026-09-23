@@ -26,7 +26,7 @@ import {
   REMEMBERED_COLORS,
 } from './colors';
 import { BASE_COLORS, DEFAULT_CUSTOM_COLOR } from './constants';
-import { stageGap } from '../components/Stage';
+import { fittingLabelWidth, stageGap } from '../components/Stage';
 import { dragAlign } from '../components/FaceArtwork';
 import { normalizeProject, useStore } from '../store';
 import {
@@ -649,6 +649,53 @@ describe('stageGap', () => {
 
   it('falls back to the label rule when no fixed gap is asked for', () => {
     expect(stageGap([20, 20], 16, LABEL)).toBe(stageGap([20, 20], 16, LABEL, 0));
+  });
+});
+
+describe('fittingLabelWidth', () => {
+  const NOMINAL = 110;
+  const SPACING = 8;
+  const FLOOR = 72;
+
+  /** What the row takes at any scale: one label per item, plus the spacing between them. */
+  const rowFloor = (labelWidth: number, count: number) => count * labelWidth + SPACING * (count - 1);
+
+  it('leaves the labels alone when the area can hold them', () => {
+    expect(fittingLabelWidth(rowFloor(NOMINAL, 3) + 50, 3, NOMINAL)).toBe(NOMINAL);
+    expect(fittingLabelWidth(2000, 2, NOMINAL)).toBe(NOMINAL);
+  });
+
+  it('narrows them to exactly what fits rather than collapsing the drawing', () => {
+    // 278 px is the width three prism faces were given on a tablet, where the drawing used to give way.
+    const width = fittingLabelWidth(278, 3, NOMINAL);
+    expect(width).toBeLessThan(NOMINAL);
+    expect(rowFloor(width, 3)).toBeLessThanOrEqual(278);
+  });
+
+  it('keeps the row fitting across the whole range of areas', () => {
+    for (const area of [200, 240, 278, 320, 346, 400, 500]) {
+      const width = fittingLabelWidth(area, 3, NOMINAL);
+      // Below the floor the labels can shrink no further, and only then may the row exceed the area.
+      if (width > FLOOR) expect(rowFloor(width, 3), `area ${area}`).toBeLessThanOrEqual(area + 1e-9);
+    }
+  });
+
+  it('never squeezes a label past the point of being readable', () => {
+    expect(fittingLabelWidth(10, 3, NOMINAL)).toBe(FLOOR);
+    expect(fittingLabelWidth(0, 5, NOMINAL)).toBe(FLOOR);
+  });
+
+  it('widens again as the area grows, without a step', () => {
+    let previous = 0;
+    for (let area = 100; area <= 600; area += 5) {
+      const width = fittingLabelWidth(area, 3, NOMINAL);
+      expect(width, `area ${area}`).toBeGreaterThanOrEqual(previous);
+      previous = width;
+    }
+  });
+
+  it('has nothing to decide without items', () => {
+    expect(fittingLabelWidth(50, 0, NOMINAL)).toBe(NOMINAL);
   });
 });
 

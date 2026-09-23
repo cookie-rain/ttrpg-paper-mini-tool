@@ -1188,18 +1188,15 @@ input[type='range'] {
 }
 
 /*
- * Two columns still fit here, but only just, and what is left over goes to the stage. That matters more
- * than it sounds: the drawing has to hold the face labels apart, and once they need more width than the
- * area has, the scale falls all the way to its minimum and the figure shrinks to a speck under a ruler
- * running to 800 mm. The side columns give way first — controls stay readable at any width, the preview
- * does not.
+ * Two columns still fit here, but only just, and what is left over goes to the stage. The preview no
+ * longer breaks when it runs short — it narrows its labels first — but it is still the part of the
+ * window that gains most from the room, so the side columns give way before it does.
  */
 @media (min-width: 901px) and (max-width: 1250px) {
   .sidebar {
     width: 230px;
   }
-  /* Padding and gaps are the cheapest width there is: taking them back costs no content, and the stage
-     needs every pixel to stay on the right side of the threshold described above. */
+  /* Padding and gaps are the cheapest width there is: taking them back costs no content at all. */
   .app-main {
     padding: 10px;
   }
