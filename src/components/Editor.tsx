@@ -139,7 +139,7 @@ export function Editor() {
       <section className="panel editor-properties">
         <div className="panel-header">
           <h2>Figure</h2>
-          <div className="button-row">
+          <div className="button-row wrap">
             <button type="button" onClick={() => moveFigure(figure.id, -1)} title="Move up in the list">
               ↑
             </button>

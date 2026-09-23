@@ -38,6 +38,11 @@ const DEFAULT_MIN_GAP_PX = 16;
 const DEFAULT_LABEL_WIDTH_PX = 110;
 /** Space kept free between neighbouring labels. */
 const LABEL_SPACING_PX = 8;
+/**
+ * Below this the stage is too narrow to spend a whole column on naming the reference lines: the lines
+ * stay, their labels go, and the figures get the width back.
+ */
+const LINE_LABELS_FROM_PX = 380;
 /** Slack against rounding, so the row never trips the scrolling area by a pixel. */
 const SCROLL_SAFETY_PX = 4;
 /** With `fit="leading"`, at least this share of the free width stays available for the scrolling items. */
@@ -154,22 +159,26 @@ export function Stage({
 
   const resolveGap = (widths: number[]) => stageGap(widths, minGapPx, labelWidthPx, fixedGapPx);
 
+  const showLineLabels = referenceLines.length > 0 && available.width >= LINE_LABELS_FROM_PX;
+  const labelsColumnPx = showLineLabels ? labelsWidth : 0;
+
   const allItems = leading ? [leading, ...items] : items;
   const requiredLines = referenceLines.filter((line) => !line.optional);
   const tallest = Math.max(10, ...allItems.map((item) => item.heightMm), ...requiredLines.map((line) => line.heightMm));
   // With fit="all" nothing scrolls, so no room is needed for the scrollbar.
   const scrollbarSpace = fit === 'all' ? 0 : SCROLLBAR_ALLOWANCE_PX;
   const byHeight = (available.height - labelHeight - scrollbarSpace) / (tallest * HEADROOM);
-  const freeWidth = available.width - labelsWidth - EDGE_PADDING_PX;
+  const freeWidth = available.width - labelsColumnPx - EDGE_PADDING_PX;
   let byWidth = MAX_PX_PER_MM;
   let overlapMm = leading?.trailingOverlapMm ?? 0;
+  /** Width the row may take without the area scrolling; the padding has to come out of it as well. */
+  let roomPx = Infinity;
   if (fit === 'all' && leadingBehind) {
     // The backdrop plays no part in the fit; the items get their own slice of the width and stay centred.
     // Whatever the row ends up holding has to fit the area exactly: a scrollbar here would not only look
     // wrong, it would also steal height from the drawing area below.
-    const compensation = centerItems ? labelsWidth : 0;
-    const room = freeWidth - EDGE_PADDING_PX - compensation - SCROLL_SAFETY_PX;
-    const budget = Math.max(0, Math.min(room, available.width * itemAreaShare));
+    roomPx = freeWidth - EDGE_PADDING_PX - SCROLL_SAFETY_PX;
+    const budget = Math.max(0, Math.min(roomPx, available.width * itemAreaShare));
     ({ scale: byWidth } = fitAll(undefined, items, budget, byHeight, resolveGap, labelWidthPx, false, centerItems));
     overlapMm = 0;
   } else if (fit === 'all') {
@@ -203,6 +212,15 @@ export function Stage({
   // Centring only reads as centred when both ends are padded the same, whatever the items measure.
   const padStartPx = centerItems ? Math.max(firstPadPx, lastPadPx) : firstPadPx;
   const padEndPx = centerItems ? padStartPx : lastPadPx;
+  // Evening out the line labels is a nicety, so it takes what is left once the items have their room:
+  // all of it on a wide stage, none at all on one too narrow to spare any.
+  const usedPx =
+    itemWidthsPx.reduce((sum, width) => sum + width, 0) +
+    gapPx * Math.max(0, itemWidthsPx.length - 1) +
+    padStartPx +
+    padEndPx;
+  const compensationPx =
+    centerItems && leadingBehind ? Math.min(labelsColumnPx, Math.max(0, roomPx - usedPx)) : 0;
   const squarePx = GRID_SQUARE_MM * pxPerMm;
   // The drawing area always fills the available height. When the scale is limited by the width, the grid simply
   // continues upwards above the tallest item instead of leaving empty space below the labels.
@@ -285,8 +303,8 @@ export function Stage({
                 paddingLeft:
                   (leading && !centerItems && !leadingBehind ? padStartPx : padStartPx + EDGE_PADDING_PX) +
                   // The line labels sit to the right of this area, so centring inside it reads as
-                  // left-of-centre on the stage. Padding the left by their width evens that out.
-                  (centerItems && leadingBehind ? labelsWidth : 0),
+                  // left-of-centre on the stage. This evens that out as far as there is room for it.
+                  compensationPx,
                 paddingRight: padEndPx + EDGE_PADDING_PX,
               }}
             >
@@ -303,7 +321,7 @@ export function Stage({
           )}
         </div>
 
-        {referenceLines.length > 0 && (
+        {showLineLabels && (
           <div className="stage-line-labels" ref={labelsRef} style={{ height: drawHeight }}>
             {/* Invisible copy sizes the column to its widest label; the visible labels are positioned absolutely. */}
             <div className="stage-line-labels-sizer" aria-hidden="true">

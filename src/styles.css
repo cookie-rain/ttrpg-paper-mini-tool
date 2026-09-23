@@ -438,7 +438,8 @@ input[type='range'] {
 
 .swatches {
   display: flex;
-  gap: 6px;
+  /* One pixel tighter than the usual row: it is what keeps all seven on one line in a narrow column. */
+  gap: 5px;
   flex-wrap: wrap;
 }
 .swatch {
@@ -590,7 +591,8 @@ input[type='range'] {
 /* ---------- Sidebar ---------- */
 
 .sidebar {
-  width: 280px;
+  /* Gives way on narrow screens instead of eating half of them. */
+  width: clamp(220px, 24vw, 280px);
   flex-shrink: 0;
   background: var(--panel);
   border-right: 1px solid var(--border);
@@ -914,8 +916,10 @@ input[type='range'] {
 
 .editor {
   display: grid;
-  /* Same split as the lineup, so the stage is the same size in both views. */
-  grid-template-columns: 260px 1fr;
+  /* Same split as the lineup, so the stage is the same size in both views. The second column is
+     minmax(0, 1fr) rather than 1fr: a plain 1fr never shrinks below its content and pushes the grid
+     off the screen instead. */
+  grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
   gap: 16px;
   height: 100%;
   min-height: 520px;
@@ -955,10 +959,13 @@ input[type='range'] {
 .size-slider-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 10px 12px;
 }
 .size-slider {
-  flex: 1;
+  /* Takes the room that is left, and drops onto a line of its own before the fields are squeezed. */
+  flex: 1 1 180px;
+  min-width: 120px;
 }
 .size-limit {
   margin: -4px 0 0;
@@ -1016,7 +1023,7 @@ input[type='range'] {
 }
 .lineup {
   display: grid;
-  grid-template-columns: 1fr 260px;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 260px);
   gap: 16px;
   height: 100%;
   min-height: 520px;
@@ -1026,7 +1033,7 @@ input[type='range'] {
 
 .print-view {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -1103,13 +1110,58 @@ input[type='range'] {
 
 /* ---------- Narrow screens ---------- */
 
-@media (max-width: 1000px) {
+/* ---------- Touch screens ---------- */
+
+/*
+ * A finger is a far blunter pointer than a mouse, and there is no hover to fall back on, so the
+ * smallest targets get room to be hit. Sizes only, nothing about how anything reads.
+ */
+@media (pointer: coarse) {
+  button,
+  select,
+  input[type='text'] {
+    min-height: 36px;
+  }
+  /* Text links are the smallest targets of all: reset, centre, hide, change paper size. */
+  button.link {
+    padding: 6px 2px;
+  }
+  .checkbox input,
+  .swatches input {
+    width: 18px;
+    height: 18px;
+  }
+  .number-input-steppers button {
+    min-height: 0;
+    padding: 0 10px;
+  }
+  /* Dragged rather than tapped, so the page must not take the gesture for a scroll. */
+  .stage-scrollbar-track {
+    height: 14px;
+    border-radius: 7px;
+    touch-action: none;
+  }
+  .stage-scrollbar-thumb {
+    border-radius: 7px;
+  }
+}
+
+/*
+ * Below this the two columns no longer leave the stage a usable width, so everything stacks. Kept low
+ * on purpose: a tablet in landscape has the width for two columns and very little height to spare, and
+ * stacking would spend that height on a three-row header and a full-width figure list.
+ */
+@media (max-width: 900px) {
+  /* Wraps onto as many rows as it needs instead of always taking three. */
   .app-header {
-    grid-template-columns: 1fr;
-    justify-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    row-gap: 8px;
   }
   .header-actions {
-    justify-self: center;
+    justify-self: auto;
   }
   .app-body {
     flex-direction: column;
