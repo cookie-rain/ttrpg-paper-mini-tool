@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { useStore } from '../store';
 import type { Figure, FigureShape, FigureSide, SideKey } from '../types';
-import { PRISM_SIDES, rotateSide } from '../lib/sides';
+import { flatBack, PRISM_SIDES, rotateSide } from '../lib/sides';
 import { CropTool } from './CropTool';
 
 /** The pieces of artwork each shape has, in the order they are offered. */
@@ -66,14 +66,14 @@ function SidePanel({ figure, which }: { figure: Figure; which: SideKey }) {
   const copyMainTo = useStore((s) => s.copyMainTo);
   const updateSide = useStore((s) => s.updateSide);
   const fileInput = useRef<HTMLInputElement>(null);
-  const side: FigureSide | null = figure[which];
+  // A flat mini's back mirrors the main image until that is removed; every other empty side is blank.
+  const mirroring = figure.shape === 'flat' && which === 'back' && figure.mirrorBack && !figure.back;
+  // Shown as it will print, so the tab is not empty while the back is only mirroring.
+  const side: FigureSide | null = figure[which] ?? (mirroring ? flatBack(figure) : null);
   const image = side ? images[side.imageId] : undefined;
 
-  // A flat mini's back mirrors the main image until that is removed; every other empty side is blank.
-  const mirroring = figure.shape === 'flat' && which === 'back' && figure.mirrorBack;
-  const emptyText = mirroring
-    ? 'No back image of its own: the main image is mirrored onto the back. Remove it to print a blank back.'
-    : figure.shape === 'prism'
+  const emptyText =
+    figure.shape === 'prism'
       ? 'No image yet: this face of the tube stays blank. “Use main” puts the main image on it, mirrored.'
       : 'Nothing on the back: it prints blank. “Use main” mirrors the main image onto it again.';
 
@@ -110,6 +110,13 @@ function SidePanel({ figure, which }: { figure: Figure; which: SideKey }) {
           if (file) setSideImage(figure.id, which, file);
         }}
       />
+
+      {mirroring && (
+        <p className="muted small mirroring-note">
+          Mirroring the main image. Cropping or turning it here gives the back artwork of its own, which
+          then stops following the front.
+        </p>
+      )}
 
       {side && image ? (
         <>

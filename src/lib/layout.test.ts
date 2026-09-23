@@ -1332,3 +1332,33 @@ describe('a flat mini left blank on the back', () => {
     expect(load({ mirrorBack: 'no' }).mirrorBack).toBe(false);
   });
 });
+
+describe('editing a back that is still mirroring the front', () => {
+  const edit = (overrides: Partial<Figure>, patch: Partial<Figure['front']>) => {
+    const f = figure({ id: 'x', front: side(500, 1000), ...overrides });
+    useStore.setState({ figures: [f], settings: DEFAULT_SETTINGS });
+    useStore.getState().updateSide('x', 'back', patch);
+    return useStore.getState().figures[0];
+  };
+
+  it('gives the back artwork of its own, starting from the mirrored image it showed', () => {
+    const f = edit({}, { crop: { x: 1, y: 2, width: 30, height: 40 } });
+    expect(f.back?.crop).toEqual({ x: 1, y: 2, width: 30, height: 40 });
+    expect(f.back?.transform.flipX).toBe(true); // the mirror it was already showing
+    expect(f.back?.imageId).toBe(f.front.imageId);
+  });
+
+  it('leaves the front alone', () => {
+    const f = edit({}, { crop: { x: 1, y: 2, width: 30, height: 40 } });
+    expect(f.front.crop).toEqual({ x: 0, y: 0, width: 500, height: 1000 });
+    expect(f.front.transform.flipX).toBe(false);
+  });
+
+  it('does nothing on a back deliberately left blank', () => {
+    expect(edit({ mirrorBack: false }, { crop: { x: 1, y: 2, width: 30, height: 40 } }).back).toBeNull();
+  });
+
+  it('does nothing on a prism face without artwork', () => {
+    expect(edit({ shape: 'prism' }, { crop: { x: 1, y: 2, width: 30, height: 40 } }).back).toBeNull();
+  });
+});

@@ -29,6 +29,7 @@ import {
   defaultFaces,
   DEFAULT_FACE,
   figureImageIds,
+  flatBack,
   fullCrop,
   IDENTITY_TRANSFORM,
   linkedFaceAligns,
@@ -222,8 +223,12 @@ export const useStore = create<AppState>((set, get) => ({
   updateSide: (figureId, which, patch) =>
     set((state) => ({
       figures: state.figures.map((figure) => {
-        const side = figure[which];
-        if (figure.id !== figureId || !side) return figure;
+        if (figure.id !== figureId) return figure;
+        // A flat mini's back may still be mirroring the main image rather than holding artwork of its
+        // own. Cropping or turning it here is meant for the back alone, so it becomes its own from the
+        // mirrored image it was already showing.
+        const side = figure[which] ?? (figure.shape === 'flat' && which === 'back' ? flatBack(figure) : null);
+        if (!side) return figure;
         return clampFigureHeight({ ...figure, [which]: { ...side, ...patch } }, state.settings);
       }),
     })),

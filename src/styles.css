@@ -1200,6 +1200,11 @@ input[type='range'] {
 
 /* ---------- Artwork editor (one side at a time, behind tabs) ---------- */
 
+/* Says why this tab is showing artwork it does not own yet. */
+.mirroring-note {
+  margin: 0;
+}
+
 .artwork-editor {
   display: flex;
   flex-direction: column;
