@@ -1077,39 +1077,6 @@ input[type='range'] {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
 }
 
-/* ---------- Printing ---------- */
-
-.print-container {
-  display: none;
-}
-
-@media print {
-  /* Hide the whole app (not just its content) so it cannot take up an empty first page. */
-  html:has(body.printing),
-  body.printing {
-    height: auto;
-    background: #fff;
-  }
-  body.printing #root {
-    display: none;
-  }
-  body.printing .print-container {
-    display: block;
-  }
-  body.printing .print-sheet {
-    overflow: hidden;
-    break-after: page;
-  }
-  body.printing .print-sheet:last-child {
-    break-after: auto;
-  }
-  body.printing .print-sheet img {
-    display: block;
-  }
-}
-
-/* ---------- Narrow screens ---------- */
-
 /* ---------- Touch screens ---------- */
 
 /*

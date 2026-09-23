@@ -79,14 +79,16 @@ No glue at hand? Switch the tab off and close the tube with a piece of tape.
   Large 3–5 m / 9.84–16.4 ft, Huge 5–10 m / 16.4–32.81 ft, Gargantuan 10 m+ / 32.81 ft+).
 - **Base styles** for flat minis: for plastic stands or as a folded paper foot.
 - **Cut and fold line styles**: solid, dashed, corner marks, edge ticks or none.
-- **PDF download or direct printing**, with a live preview, page numbers and a calibration ruler.
+- **PDF export** with a live preview, page numbers and a calibration ruler. A PDF carries the exact page
+  and figure sizes, which printing straight from the browser cannot promise: its dialog may scale the
+  sheet, and a mini printed at 97 % is simply the wrong size.
 - **mm or inches** throughout.
 - **Projects** are saved automatically in the browser and can be exported/imported as a file.
 
 ## Tips
 
 - Transparent PNGs give the best results.
-- Always print at **100 % / “actual size”** and check the calibration ruler on the page.
+- Print the PDF at **100 % / “actual size”** — not “fit to page” — and check the calibration ruler on the sheet.
 - Heavier paper (160–250 g/m²) makes sturdier minis — and triangular ones stand firmer on it.
 
 ## Development
@@ -111,8 +113,8 @@ src/
     geometry.ts   card and figure dimensions
     sides.ts      a figure's artwork per side: crop, rotation and mirroring
     layout.ts     packs cards onto pages
-    render.ts     draws pages onto a canvas (used for preview, PDF and printing)
-    output.ts     PDF export and browser printing
+    render.ts     draws pages onto a canvas (used for the preview and the PDF)
+    output.ts     PDF export
     image.ts      image import and auto-trim
   components/   React UI (editor, lineup, print view, ...)
   store.ts      application state and persistence

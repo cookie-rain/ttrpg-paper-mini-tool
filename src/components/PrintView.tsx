@@ -13,7 +13,7 @@ import { LOW_DPI_WARNING, PAPER_SIZES_MM } from '../lib/constants';
 import { effectiveDpi, prismCloses, prismPanelWidths } from '../lib/geometry';
 import { PRISM_SIDES } from '../lib/sides';
 import { layoutPages } from '../lib/layout';
-import { buildPdf, downloadBlob, printPages, renderPrintPages } from '../lib/output';
+import { buildPdf, downloadBlob, renderPrintPages } from '../lib/output';
 import { createPageCanvas, decodeFigureImages, renderPage } from '../lib/render';
 import { Field, LengthInput, Segmented } from './controls';
 
@@ -45,20 +45,21 @@ export function PrintView() {
     (f) => f.shape === 'prism' && !prismCloses(prismPanelWidths(f, settings)),
   );
 
-  const exportPages = async (action: 'pdf' | 'print') => {
+  /**
+   * The only way out of the tool. Printing straight from the browser was the other one, but its dialog
+   * can scale the page without saying much about it, and a mini printed at 97 % is simply the wrong
+   * size. The PDF carries the exact page and figure sizes, whatever it is opened with later.
+   */
+  const savePdf = async () => {
     setError(null);
     try {
       setBusy('Rendering pages…');
       const blobs = await renderPrintPages(figures, images, settings, (done, total) =>
         setBusy(`Rendering page ${done} of ${total}…`),
       );
-      if (action === 'pdf') {
-        setBusy('Building PDF…');
-        const bytes = await buildPdf(blobs, settings);
-        downloadBlob(new Blob([bytes as BlobPart], { type: 'application/pdf' }), 'paper-minis.pdf');
-      } else {
-        await printPages(blobs, settings);
-      }
+      setBusy('Building PDF…');
+      const bytes = await buildPdf(blobs, settings);
+      downloadBlob(new Blob([bytes as BlobPart], { type: 'application/pdf' }), 'paper-minis.pdf');
     } catch (failure) {
       console.error(failure);
       setError('Something went wrong while rendering. See the browser console for details.');
@@ -310,17 +311,17 @@ export function PrintView() {
             type="button"
             className="primary"
             disabled={!!busy || layout.pages.length === 0}
-            onClick={() => exportPages('pdf')}
+            onClick={savePdf}
           >
-            Download PDF
-          </button>
-          <button type="button" disabled={!!busy || layout.pages.length === 0} onClick={() => exportPages('print')}>
-            Print…
+            Save PDF
           </button>
         </div>
         {busy && <p className="muted small">{busy}</p>}
         {error && <p className="warning-note small">{error}</p>}
-        <p className="muted small">Always print at 100 % / “actual size”. Check the calibration ruler after printing.</p>
+        <p className="muted small">
+          Print the PDF at 100 % / “actual size” — not “fit to page” — and check the calibration ruler on
+          the sheet afterwards.
+        </p>
 
         {(oversized.length > 0 || unclosable.length > 0 || lowResFigures.length > 0) && (
           <div className="warnings warning-note">
