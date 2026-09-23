@@ -118,6 +118,11 @@ button.danger {
   border-color: var(--danger);
   color: var(--danger);
 }
+/* A single glyph does not need the side padding a word does, and the room goes to its neighbours: it is
+   what lets the figure toolbar keep Delete on the same line as Duplicate in a narrow column. */
+button.icon {
+  padding: 5px 7px;
+}
 button.link {
   background: none;
   border: none;

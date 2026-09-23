@@ -140,10 +140,10 @@ export function Editor() {
         <div className="panel-header">
           <h2>Figure</h2>
           <div className="button-row wrap">
-            <button type="button" onClick={() => moveFigure(figure.id, -1)} title="Move up in the list">
+            <button type="button" className="icon" onClick={() => moveFigure(figure.id, -1)} title="Move up in the list">
               ↑
             </button>
-            <button type="button" onClick={() => moveFigure(figure.id, 1)} title="Move down in the list">
+            <button type="button" className="icon" onClick={() => moveFigure(figure.id, 1)} title="Move down in the list">
               ↓
             </button>
             <button type="button" onClick={() => duplicateFigure(figure.id)}>
