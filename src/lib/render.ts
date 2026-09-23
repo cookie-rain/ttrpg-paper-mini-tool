@@ -158,17 +158,19 @@ function drawCard(
 
   // Back half, rotated 180°. Folding over the top turns it upright again and, seen from behind, also
   // swaps left and right, so the rotation's horizontal flip cancels out: whoever looks at the back sees
-  // the artwork exactly as the editor shows it. The default back is the main image mirrored.
+  // the artwork exactly as the editor shows it. Without a back the half is left blank.
   const back = flatBack(figure);
-  const backSize = sideSize(back, figure.heightMm);
-  ctx.save();
-  ctx.translate(cardWidth, foldY);
-  ctx.scale(-1, -1);
-  // Mirrored by the turn, so the offset is counted from the other end and the halves stay on top of
-  // each other once the card is folded.
-  ctx.translate((cardWidth - backSize.width) * (1 - align), 0);
-  drawSideArtwork(ctx, back, decoded.get(back.imageId), backSize.width, backSize.height);
-  ctx.restore();
+  if (back) {
+    const backSize = sideSize(back, figure.heightMm);
+    ctx.save();
+    ctx.translate(cardWidth, foldY);
+    ctx.scale(-1, -1);
+    // Mirrored by the turn, so the offset is counted from the other end and the halves stay on top of
+    // each other once the card is folded.
+    ctx.translate((cardWidth - backSize.width) * (1 - align), 0);
+    drawSideArtwork(ctx, back, decoded.get(back.imageId), backSize.width, backSize.height);
+    ctx.restore();
+  }
 
   // Front base strip.
   ctx.save();

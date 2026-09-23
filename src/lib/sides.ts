@@ -53,11 +53,12 @@ export function mirrored(side: FigureSide): FigureSide {
 }
 
 /**
- * The back of a flat mini as seen from behind: its own artwork, or the main image mirrored.
- * The mirrored main image is what makes a flat mini look like the same figure from both sides.
+ * The back of a flat mini as seen from behind: its own artwork, the main image mirrored, or nothing.
+ * The mirrored main image is what makes a flat mini look like the same figure from both sides; removing
+ * it leaves the back blank, for a figure meant to be seen from the front only.
  */
-export function flatBack(figure: Pick<Figure, 'front' | 'back'>): FigureSide {
-  return figure.back ?? mirrored(figure.front);
+export function flatBack(figure: Pick<Figure, 'front' | 'back' | 'mirrorBack'>): FigureSide | null {
+  return figure.back ?? (figure.mirrorBack ? mirrored(figure.front) : null);
 }
 
 /** Rotates by a quarter turn and normalises back into 0-3, so the UI can just add or subtract 1. */

@@ -67,6 +67,7 @@ function figure(overrides: Partial<Figure> = {}): Figure {
     shape: 'flat',
     front: side(500, 1000),
     back: null,
+    mirrorBack: true,
     left: null,
     heightMm: 35,
     faces: defaultFaces(),
@@ -868,8 +869,18 @@ describe('text on flat minis', () => {
 describe('flat mini back, seen from behind', () => {
   it('defaults to the main image mirrored', () => {
     const f = figure({ front: side(500, 1000) });
-    expect(flatBack(f).transform.flipX).toBe(true);
-    expect(flatBack(f).imageId).toBe(f.front.imageId);
+    expect(flatBack(f)?.transform.flipX).toBe(true);
+    expect(flatBack(f)?.imageId).toBe(f.front.imageId);
+  });
+
+  it('prints nothing once the mirrored back is removed', () => {
+    expect(flatBack(figure({ mirrorBack: false }))).toBeNull();
+  });
+
+  it('shows its own artwork whether or not the mirror was ever removed', () => {
+    const back = side(400, 1000, 'img2');
+    expect(flatBack(figure({ back, mirrorBack: false }))).toBe(back);
+    expect(flatBack(figure({ back, mirrorBack: true }))).toBe(back);
   });
 
   it('uses its own artwork once it has some, as it is', () => {
@@ -878,23 +889,53 @@ describe('flat mini back, seen from behind', () => {
   });
 
   describe('"Use main"', () => {
-    const run = (shape: 'flat' | 'prism', which: 'back' | 'left') => {
-      const f = figure({ id: 'x', shape });
+    const run = (shape: 'flat' | 'prism', which: 'back' | 'left', overrides: Partial<Figure> = {}) => {
+      const f = figure({ id: 'x', shape, ...overrides });
       useStore.setState({ figures: [f], settings: DEFAULT_SETTINGS });
       useStore.getState().copyMainTo('x', which);
-      return useStore.getState().figures[0][which]!;
+      return useStore.getState().figures[0];
     };
 
-    it('starts a flat back mirrored, so it looks as it did without artwork', () => {
-      expect(run('flat', 'back').transform.flipX).toBe(true);
+    it('sets a flat back back to mirroring the main image, rather than copying it', () => {
+      // A copy would stop following the front; going back to mirroring keeps them in step.
+      const f = run('flat', 'back', { mirrorBack: false, back: side(400, 1000, 'img2') });
+      expect(f.back).toBeNull();
+      expect(f.mirrorBack).toBe(true);
+      expect(flatBack(f)?.transform.flipX).toBe(true);
     });
 
-    it('starts a prism front-left face mirrored for the same reason', () => {
-      expect(run('prism', 'left').transform.flipX).toBe(true);
+    it('starts a prism Side B mirrored, as it looked before it had artwork', () => {
+      expect(run('prism', 'left').left!.transform.flipX).toBe(true);
     });
 
-    it('copies the main image unchanged onto a prism back, which was blank', () => {
-      expect(run('prism', 'back').transform.flipX).toBe(false);
+    it('copies the main image unchanged onto a prism Side C, which was blank', () => {
+      expect(run('prism', 'back').back!.transform.flipX).toBe(false);
+    });
+  });
+
+  describe('"Remove"', () => {
+    const remove = (shape: 'flat' | 'prism', overrides: Partial<Figure> = {}) => {
+      const f = figure({ id: 'x', shape, ...overrides });
+      useStore.setState({ figures: [f], settings: DEFAULT_SETTINGS });
+      useStore.getState().clearSide('x', 'back');
+      return useStore.getState().figures[0];
+    };
+
+    it('leaves a flat back blank rather than letting the mirror come back', () => {
+      const f = remove('flat', { back: side(400, 1000, 'img2') });
+      expect(f.back).toBeNull();
+      expect(f.mirrorBack).toBe(false);
+      expect(flatBack(f)).toBeNull();
+    });
+
+    it('blanks a flat back that was only mirroring the main image', () => {
+      expect(flatBack(remove('flat'))).toBeNull();
+    });
+
+    it('leaves a prism alone, its faces having no mirror to stop', () => {
+      const f = remove('prism', { back: side(400, 1000, 'img2') });
+      expect(f.back).toBeNull();
+      expect(f.mirrorBack).toBe(true);
     });
   });
 });
@@ -1266,5 +1307,28 @@ describe('which faces carry the band', () => {
     const f = figure({ shape: 'prism', front: side(500, 1000), heightMm: 40 });
     const settings = { ...DEFAULT_SETTINGS, prismBandSides: { front: false, left: false, back: false } };
     expect(cardSize(f, settings).height).toBeCloseTo(40);
+  });
+});
+
+describe('a flat mini left blank on the back', () => {
+  it('keeps the card the size its front needs', () => {
+    const blank = figure({ front: side(500, 1000), heightMm: 40, mirrorBack: false });
+    const mirroring = figure({ front: side(500, 1000), heightMm: 40, mirrorBack: true });
+    expect(cardSize(blank, DEFAULT_SETTINGS)).toEqual(cardSize(mirroring, DEFAULT_SETTINGS));
+  });
+
+  it('is what projects saved before this could not say, so they keep their mirror', () => {
+    const image = { id: 'img', dataUrl: 'data:image/png;base64,AAAA', width: 100, height: 200 };
+    const load = (fields: Record<string, unknown>) =>
+      normalizeProject({
+        app: 'ttrpg-paper-mini-tool',
+        version: 1,
+        settings: DEFAULT_SETTINGS,
+        figures: [{ id: 'f1', front: { imageId: 'img' }, ...fields }],
+        images: { img: image },
+      }).figures[0];
+    expect(load({}).mirrorBack).toBe(true);
+    expect(load({ mirrorBack: false }).mirrorBack).toBe(false);
+    expect(load({ mirrorBack: 'no' }).mirrorBack).toBe(false);
   });
 });

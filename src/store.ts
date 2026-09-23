@@ -154,6 +154,7 @@ export const useStore = create<AppState>((set, get) => ({
               shape: 'flat',
               front: makeSide(imageId, trim),
               back: null,
+              mirrorBack: true,
               left: null,
               heightMm: get().settings.categoryHeightsMm.medium ?? DEFAULT_FIGURE_HEIGHT_MM,
               faces: defaultFaces(),
@@ -195,20 +196,26 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({
       figures: state.figures.map((figure) => {
         if (figure.id !== figureId) return figure;
-        // Both sides share the image; only the crop and orientation are copied, so they stay independent.
-        // It starts out as the side looked before it had artwork of its own: mirrored for a prism's front
-        // left and a flat mini's back. A prism's back was blank, so it just takes the main image as it is.
-        const startsMirrored = which === 'left' || figure.shape === 'flat';
-        const copy = startsMirrored ? mirrored(figure.front) : { ...figure.front };
+        // A flat mini's back mirrors the main image by itself and keeps following it, so it goes back to
+        // doing that rather than taking a copy that would then stop following.
+        if (figure.shape === 'flat' && which === 'back') {
+          return clampFigureHeight({ ...figure, back: null, mirrorBack: true }, state.settings);
+        }
+        // Elsewhere the image is shared but the crop and orientation are copied, so the sides stay
+        // independent. Side B starts mirrored, as it looked before it had artwork of its own.
+        const copy = which === 'left' ? mirrored(figure.front) : { ...figure.front };
         return clampFigureHeight({ ...figure, [which]: copy }, state.settings);
       }),
     })),
 
   clearSide: (figureId, which) =>
     set((state) => {
-      const figures = state.figures.map((figure) =>
-        figure.id === figureId ? clampFigureHeight({ ...figure, [which]: null }, state.settings) : figure,
-      );
+      const figures = state.figures.map((figure) => {
+        if (figure.id !== figureId) return figure;
+        // Removing a flat mini's back stops it mirroring the front as well, or it would simply come back.
+        const blanked = figure.shape === 'flat' && which === 'back' ? { mirrorBack: false } : {};
+        return clampFigureHeight({ ...figure, [which]: null, ...blanked }, state.settings);
+      });
       return { figures, images: pruneImages(state.images, figures) };
     }),
 
@@ -442,6 +449,8 @@ function normalizeFigure(raw: unknown, images: Record<string, StoredImage>): Fig
     shape: pickEnum<FigureShape>(figure.shape, ['flat', 'prism'], 'flat'),
     front,
     back: normalizeSide(figure.back, images),
+    // Projects saved before the back could be left blank always mirrored the front.
+    mirrorBack: figure.mirrorBack === undefined ? true : figure.mirrorBack === true,
     // Saved as `right` on this branch before the two front faces swapped names.
     left: normalizeSide(figure.left ?? figure.right, images),
     heightMm: Math.max(MIN_FIGURE_HEIGHT_MM, finite(figure.heightMm, DEFAULT_FIGURE_HEIGHT_MM)),

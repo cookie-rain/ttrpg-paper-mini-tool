@@ -69,10 +69,13 @@ function SidePanel({ figure, which }: { figure: Figure; which: SideKey }) {
   const side: FigureSide | null = figure[which];
   const image = side ? images[side.imageId] : undefined;
 
-  const emptyText =
-    figure.shape === 'prism'
+  // A flat mini's back mirrors the main image until that is removed; every other empty side is blank.
+  const mirroring = figure.shape === 'flat' && which === 'back' && figure.mirrorBack;
+  const emptyText = mirroring
+    ? 'No back image of its own: the main image is mirrored onto the back. Remove it to print a blank back.'
+    : figure.shape === 'prism'
       ? 'No image yet: this face of the tube stays blank. “Use main” puts the main image on it, mirrored.'
-      : 'No back image yet: the main image is mirrored onto the back.';
+      : 'Nothing on the back: it prints blank. “Use main” mirrors the main image onto it again.';
 
   return (
     <>
@@ -87,7 +90,7 @@ function SidePanel({ figure, which }: { figure: Figure; which: SideKey }) {
             Use main
           </button>
         )}
-        {which !== 'front' && side && (
+        {which !== 'front' && (side || mirroring) && (
           <button type="button" className="side-action" onClick={() => clearSide(figure.id, which)}>
             Remove
           </button>

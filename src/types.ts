@@ -88,10 +88,15 @@ export interface Figure {
   /** The main image: the front of a flat mini, and a prism's front-right face. */
   front: FigureSide;
   /**
-   * Artwork for the back. A flat mini without one shows `front` mirrored; a prism without one leaves its
-   * back face empty.
+   * Artwork for the back. A flat mini without one either mirrors `front` or prints nothing, depending on
+   * `mirrorBack`; a prism without one leaves Side C empty.
    */
   back: FigureSide | null;
+  /**
+   * What the back of a flat mini shows while it has no artwork of its own: the front mirrored, as it
+   * looks from behind, or nothing at all. Prisms leave a face without artwork empty either way.
+   */
+  mirrorBack: boolean;
   /**
    * Artwork for a prism's front-left face; the front-right face shows `front`. Without it the left face
    * shows `front` mirrored. Flat minis ignore it, but keep it so switching shape back restores it.

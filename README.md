@@ -32,7 +32,7 @@ One strip that you cut out and fold at the top:
 
 After folding, the figure shows the artwork on both sides and the base strip clips into a small plastic stand.
 Without a back image of its own, the back shows the front mirrored, as if you were looking at the figure
-from behind.
+from behind — remove that and the back prints blank instead, for a figure only ever seen from the front.
 
 No stands? Choose **Folded paper foot**: both base strips bend out 90° into a foot, and an extra flap
 (twice the strip length) folds under it as reinforcement.

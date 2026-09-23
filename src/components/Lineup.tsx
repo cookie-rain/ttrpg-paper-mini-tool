@@ -31,9 +31,9 @@ export function Lineup() {
   const anyBacks = figures.some((f) => f.back);
 
   const items: StageItem[] = visibleFigures.map<StageItem>((figure) => {
-      // Seen from behind a flat mini shows its mirrored main image by default; a prism without a back
-      // keeps showing its front, so the row never has gaps.
-      const back = figure.shape === 'flat' ? flatBack(figure) : (figure.back ?? figure.front);
+      // A figure with nothing on its back keeps showing its front here, so the row never has gaps and
+      // stays useful for comparing sizes.
+      const back = (figure.shape === 'flat' ? flatBack(figure) : figure.back) ?? figure.front;
       const shown = lineup.showSide === 'back' ? back : figure.front;
       const size = sideSize(shown, figure.heightMm);
       return {
