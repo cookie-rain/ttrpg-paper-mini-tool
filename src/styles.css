@@ -246,6 +246,10 @@ input[type='range'] {
   flex: 1;
   min-width: 0;
   overflow: auto;
+  /* Always reserve the scrollbar's width. Without it, a scrollbar that appears narrows the stage, the
+     figures are redrawn smaller, the content gets shorter, the scrollbar goes away again — and the
+     view rescales on every frame without ever settling. */
+  scrollbar-gutter: stable;
   padding: 16px;
 }
 
@@ -924,13 +928,19 @@ input[type='range'] {
   height: 100%;
   min-height: 520px;
 }
-.editor-size {
-  min-height: 0;
-}
+
 /* Scrolls inside itself like the lineup's side column, so the window never has to scroll. */
 .editor-properties {
   min-height: 0;
   overflow-y: auto;
+}
+/* Scrolls inside itself too: on a short screen the stage plus the size controls need more room
+   than the panel has, and without this the controls simply stand outside the panel's border. */
+.editor-size {
+  min-height: 0;
+  overflow-y: auto;
+  /* Reserved for the same reason as the main area: this panel's scrollbar narrows the stage. */
+  scrollbar-gutter: stable;
 }
 .crop-tool {
   display: flex;
@@ -1028,6 +1038,13 @@ input[type='range'] {
   height: 100%;
   min-height: 520px;
 }
+/* Scrolls inside itself, like the editor's size panel: on a short screen the stage and the figure
+   readings below it need more room than the panel has, and they would otherwise stand outside it. */
+.lineup-stage {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
 
 /* ---------- Print ---------- */
 
@@ -1084,24 +1101,6 @@ input[type='range'] {
  * smallest targets get room to be hit. Sizes only, nothing about how anything reads.
  */
 @media (pointer: coarse) {
-  button,
-  select,
-  input[type='text'] {
-    min-height: 36px;
-  }
-  /* Text links are the smallest targets of all: reset, centre, hide, change paper size. */
-  button.link {
-    padding: 6px 2px;
-  }
-  .checkbox input,
-  .swatches input {
-    width: 18px;
-    height: 18px;
-  }
-  .number-input-steppers button {
-    min-height: 0;
-    padding: 0 10px;
-  }
   /* Dragged rather than tapped, so the page must not take the gesture for a scroll. */
   .stage-scrollbar-track {
     height: 14px;
@@ -1145,14 +1144,73 @@ input[type='range'] {
     grid-template-columns: 1fr;
     height: auto;
   }
+  /*
+   * A definite height, not a minimum. The panels are height:auto here, so a stage with only a minimum
+   * takes its height from its own drawing — and the drawing is sized from the measured stage. The two
+   * chase each other on every resize and the view rescales without ever settling.
+   */
   .stage {
-    min-height: 360px;
+    flex: none;
+    height: 55vh;
+    min-height: 320px;
   }
   .artwork-panel .crop-image {
     max-height: 34vh;
   }
   .print-settings {
     position: static;
+  }
+}
+
+/*
+ * A tablet in landscape has plenty of width and almost no height. The stage keeps its 280 px there
+ * only by pushing the size controls out of the panel, so let it give way first and scroll last.
+ */
+@media (max-height: 700px) and (min-width: 901px) {
+  .stage {
+    min-height: 200px;
+  }
+  .artwork-panel .crop-image {
+    max-height: 30vh;
+  }
+}
+
+/*
+ * Every control is taller under a finger, so the size panel scrolls on a touch device whatever we do.
+ * Squeezing the preview between the header and the controls to buy height that is scrolled past anyway
+ * is the worst of both: give it about what the lineup's stage gets and let the controls follow below.
+ */
+@media (pointer: coarse) and (min-width: 901px) {
+  .editor-size .stage {
+    flex: none;
+    height: 62vh;
+  }
+}
+
+/*
+ * Two columns still fit here, but only just, and what is left over goes to the stage. That matters more
+ * than it sounds: the drawing has to hold the face labels apart, and once they need more width than the
+ * area has, the scale falls all the way to its minimum and the figure shrinks to a speck under a ruler
+ * running to 800 mm. The side columns give way first — controls stay readable at any width, the preview
+ * does not.
+ */
+@media (min-width: 901px) and (max-width: 1250px) {
+  .sidebar {
+    width: 230px;
+  }
+  /* Padding and gaps are the cheapest width there is: taking them back costs no content, and the stage
+     needs every pixel to stay on the right side of the threshold described above. */
+  .app-main {
+    padding: 10px;
+  }
+  .editor {
+    grid-template-columns: 245px minmax(0, 1fr);
+    gap: 10px;
+  }
+  /* The properties column is wide enough for a two-option toggle, but only with the padding trimmed:
+     "Triangular" is a long word for half a column this narrow. */
+  .editor-properties .field .segmented button {
+    padding: 4px 6px;
   }
 }
 

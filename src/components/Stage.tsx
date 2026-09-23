@@ -201,7 +201,10 @@ export function Stage({
     overlapMm = Math.min(maxOverlap, Math.max(baseOverlap, leading.widthMm - allowedMm));
     byWidth = (freeWidth * (1 - MIN_SCROLL_SHARE)) / Math.max(0.1, leading.widthMm - overlapMm);
   }
-  const minScale = fit === 'all' ? MIN_PX_PER_MM_FIT_ALL : MIN_PX_PER_MM;
+  // The floor keeps figures readable when the width is tight, but it must never rise above what the
+  // height allows: the drawing would then be taller than the stage, which clips the labels under it.
+  const floor = fit === 'all' ? MIN_PX_PER_MM_FIT_ALL : MIN_PX_PER_MM;
+  const minScale = Math.min(floor, byHeight);
   const pxPerMm = Math.min(MAX_PX_PER_MM, Math.max(minScale, Math.min(byHeight, byWidth)));
   const itemWidthsPx = items.map((item) => item.widthMm * pxPerMm);
   const gapPx = resolveGap(itemWidthsPx);
@@ -222,9 +225,10 @@ export function Stage({
   const compensationPx =
     centerItems && leadingBehind ? Math.min(labelsColumnPx, Math.max(0, roomPx - usedPx)) : 0;
   const squarePx = GRID_SQUARE_MM * pxPerMm;
-  // The drawing area always fills the available height. When the scale is limited by the width, the grid simply
-  // continues upwards above the tallest item instead of leaving empty space below the labels.
-  const drawHeight = Math.max(tallest * HEADROOM * pxPerMm, available.height - labelHeight - scrollbarSpace);
+  // The drawing area is exactly the height left above the labels: it fills it, so the grid continues
+  // upwards above the tallest item rather than leaving a gap, and never exceeds it, which would push
+  // the labels out of the stage and cut them off. Anything taller than that is clipped at the top.
+  const drawHeight = Math.max(0, available.height - labelHeight - scrollbarSpace);
   const overlapPx = overlapMm * pxPerMm;
   const visibleLines = pickVisibleLines(referenceLines, pxPerMm, drawHeight);
   const fadeLeft = scroll.left > 1;
