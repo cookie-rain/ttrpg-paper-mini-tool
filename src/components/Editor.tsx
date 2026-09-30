@@ -301,6 +301,7 @@ export function Editor() {
                 maxMm={MAX_OUTLINE_MM}
                 ariaLabel="Outline thickness"
                 compact
+                fine
                 onChange={(outlineMmValue) =>
                   update({ outlineMm: Math.min(MAX_OUTLINE_MM, Math.max(0, outlineMmValue)) })
                 }

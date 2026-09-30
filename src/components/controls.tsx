@@ -111,6 +111,9 @@ export function NumberInput({
 }
 
 /** Length field that stores millimetres but shows the user's unit (mm or in). */
+/** A tenth of a millimetre, and the nearest round figure to it in inches. */
+const FINE_STEP: Record<Unit, number> = { mm: 0.1, in: 0.01 };
+
 export function LengthInput({
   valueMm,
   unit,
@@ -119,6 +122,7 @@ export function LengthInput({
   onChange,
   ariaLabel,
   compact = false,
+  fine = false,
 }: {
   valueMm: number;
   unit: Unit;
@@ -127,6 +131,8 @@ export function LengthInput({
   onChange: (mm: number) => void;
   ariaLabel?: string;
   compact?: boolean;
+  /** For a length that lives in tenths of a millimetre rather than whole ones, such as a line's width. */
+  fine?: boolean;
 }) {
   return (
     <NumberInput
@@ -134,7 +140,7 @@ export function LengthInput({
       onChange={(v) => onChange(unitToMm(v, unit))}
       min={minMm !== undefined ? mmToUnit(minMm, unit) : undefined}
       max={maxMm !== undefined ? mmToUnit(maxMm, unit) : undefined}
-      step={unitStep(unit)}
+      step={fine ? FINE_STEP[unit] : unitStep(unit)}
       decimals={2}
       suffix={unit}
       ariaLabel={ariaLabel}
