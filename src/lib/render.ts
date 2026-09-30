@@ -11,7 +11,7 @@ import {
   prismBandMm,
   prismStrip,
 } from './geometry';
-import { paintOutline } from './outline';
+import { DEFAULT_OUTLINE_CORNERS, paintOutline, type OutlineCorners } from './outline';
 import { loadImageElement } from './image';
 import { applyTransform, figureImageIds, flatBack, isQuarterTurned } from './sides';
 import type { PageLayout, PlacedCard } from './layout';
@@ -88,6 +88,7 @@ function grownOutline(
   outline: number,
   hex: string,
   pxPerMm: number,
+  corners: OutlineCorners,
 ): HTMLCanvasElement | null {
   const radius = outline * pxPerMm;
   const artWidth = widthMm * pxPerMm;
@@ -108,6 +109,7 @@ function grownOutline(
     height,
     Math.round(radius * 100),
     hex,
+    corners,
   ].join(':');
   const cached = outlineCache.get(key);
   if (cached) return cached;
@@ -123,7 +125,7 @@ function grownOutline(
   octx.translate(radius, radius);
   drawSideArtwork(octx, side, img, artWidth, artHeight);
   octx.setTransform(1, 0, 0, 1, 0, 0);
-  octx.putImageData(paintOutline(octx.getImageData(0, 0, width, height), radius, hex), 0, 0);
+  octx.putImageData(paintOutline(octx.getImageData(0, 0, width, height), radius, hex, corners), 0, 0);
 
   if (outlineCache.size >= OUTLINE_CACHE_LIMIT) {
     const oldest = outlineCache.keys().next().value;
@@ -147,10 +149,11 @@ export function drawOutlinedSide(
   outline: number,
   hex: string,
   pxPerMm: number,
+  corners: OutlineCorners = DEFAULT_OUTLINE_CORNERS,
 ): void {
   if (!img) return;
   if (outline > 0) {
-    const grown = grownOutline(side, img, width, height, outline, hex, pxPerMm);
+    const grown = grownOutline(side, img, width, height, outline, hex, pxPerMm, corners);
     // Drawn at its own pixel size so the grown edge lands on the paper exactly as it was computed.
     if (grown) ctx.drawImage(grown, 0, 0, grown.width / pxPerMm, grown.height / pxPerMm);
   }

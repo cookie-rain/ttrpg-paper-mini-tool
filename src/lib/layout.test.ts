@@ -52,7 +52,7 @@ import { layoutPages } from './layout';
 import { cardCutSegments, mergeCutSegments } from './cutlines';
 import { parseDecimal } from '../components/controls';
 import { formatCategoryInGame, formatInGame, inGameMetres, inGameToMm } from './units';
-import { outlineCoverage, outlineRgb, squaredDistanceField } from './outline';
+import { outlineCoverage, outlineRgb, squaredDistanceField, type OutlineCorners } from './outline';
 
 function footprintRect(c: { x: number; y: number; width: number; height: number; rotated: boolean }) {
   return c.rotated ? { x: c.x, y: c.y, w: c.height, h: c.width } : { x: c.x, y: c.y, w: c.width, h: c.height };
@@ -97,10 +97,19 @@ function alphaOf(rows: string[]): { data: Uint8ClampedArray; width: number; heig
   return { data, width, height };
 }
 
-function coverageGrid(rows: string[], radius: number): number[][] {
+function coverageGrid(rows: string[], radius: number, corners?: OutlineCorners): number[][] {
   const { data, width, height } = alphaOf(rows);
-  const coverage = outlineCoverage(data, width, height, radius);
+  const coverage = outlineCoverage(data, width, height, radius, corners);
   return Array.from({ length: height }, (_, y) => Array.from({ length: width }, (_, x) => coverage[y * width + x]));
+}
+
+/** A solid block filling the bottom-left quadrant, so its top-right corner can be examined. */
+function cornerGrid(size: number, radius: number, corners: OutlineCorners): number[][] {
+  const half = size / 2;
+  const rows = Array.from({ length: size }, (_, y) =>
+    Array.from({ length: size }, (_, x) => (x < half && y >= half ? '#' : '.')).join(''),
+  );
+  return coverageGrid(rows, radius, corners);
 }
 
 describe('outline geometry', () => {
@@ -234,6 +243,33 @@ describe('outline coverage', () => {
   it('draws nothing without a radius, and nothing around an empty image', () => {
     expect(coverageGrid(['#'], 0).flat()).toEqual([0]);
     expect(coverageGrid(['...', '...'], 3).flat().every((value) => value === 0)).toBe(true);
+  });
+
+  // The corner is where the three differ. Measured from the block's top-right corner at (19, 20):
+  // straight out to the right, a little above that, and out along the diagonal.
+  describe('turning a corner', () => {
+    const at = (corners: OutlineCorners, dx: number, dy: number) => cornerGrid(40, 8, corners)[20 - dy][19 + dx];
+
+    it('lays the same thickness along a flat edge, whichever way corners are turned', () => {
+      for (const corners of ['round', 'chamfer', 'square'] as OutlineCorners[]) {
+        expect(at(corners, 7, 0), corners).toBe(255); // inside the radius
+        expect(at(corners, 9, 0), corners).toBe(0); // past it
+      }
+    });
+
+    it('keeps a corner where round would have filed it off', () => {
+      // Just off the axis, close to the corner: round has already fallen away here, the other two have not.
+      expect(at('round', 8, 3)).toBe(0);
+      expect(at('chamfer', 8, 3)).toBeGreaterThan(0);
+      expect(at('square', 8, 3)).toBeGreaterThan(0);
+    });
+
+    it('does not let the line fatten on the diagonal, the way square does', () => {
+      // Straight out from the corner at 45°, square reaches 41% further than it does along the axes.
+      expect(at('square', 7, 7)).toBe(255);
+      expect(at('chamfer', 7, 7)).toBe(0);
+      expect(at('round', 7, 7)).toBe(0);
+    });
   });
 
   it('reads a colour, and falls back to black on anything else', () => {

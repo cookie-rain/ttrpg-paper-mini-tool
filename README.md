@@ -70,8 +70,10 @@ No glue at hand? Switch the tab off and close the tube with a piece of tape.
 - **Copies with letters**: print *Goblin A, B, C…* so identical enemies are easy to tell apart.
 - **Outline** around a figure, in any thickness and colour: it lifts the mini off the table and gives the
   scissors a line to follow. It grows outwards, so the printed figure gets that much bigger while its
-  in-game size stays exactly where it was. Works best on artwork with a transparent background — on an
-  image with an opaque one there is nothing to follow but its edges, and the outline comes out a rectangle.
+  in-game size stays exactly where it was. Corners survive with a small bevel rather than being rounded
+  away, so a figure keeps its shape even under a thick line. Works best on artwork with a transparent
+  background — on an image with an opaque one there is nothing to follow but its edges, and the outline
+  comes out a rectangle.
 - **Base colours**: blue, red, green, yellow, gray or any colour from the colour picker, which remembers the
   ones you used. Filled or as side stripes; the text colour adapts for contrast.
 - **Two text lines** (name + info) on the base of flat minis — or none at all.
