@@ -104,6 +104,18 @@ export interface Figure {
   left: FigureSide | null;
   /** Printed height of the artwork. Width follows the aspect ratio. */
   heightMm: number;
+  /**
+   * Draw an outline around the artwork, the way printed minis are usually finished: it lifts the figure
+   * off whatever it is standing against and gives the scissors a line to follow.
+   */
+  outline: boolean;
+  /**
+   * Thickness of that outline in millimetres. It is added around the artwork rather than taken out of
+   * it, so `heightMm` keeps meaning the artwork alone and the in-game size stays put; the card grows
+   * instead. Kept while the outline is switched off, so it comes back unchanged.
+   */
+  outlineMm: number;
+  outlineColorHex: string;
   /** Per-face width and alignment, used when the figure is a prism. */
   faces: Record<SideKey, FaceLayout>;
 }

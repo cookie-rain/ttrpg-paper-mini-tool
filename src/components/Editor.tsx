@@ -1,11 +1,19 @@
 import { useRef, useState } from 'react';
 import { useStore } from '../store';
 import type { BaseColor, Figure, FigureShape, FigureSide, SideKey } from '../types';
-import { BASE_COLORS, LOW_DPI_WARNING, MIN_FIGURE_HEIGHT_MM, PAPER_SIZES_MM, SIZE_CATEGORIES } from '../lib/constants';
+import {
+  BASE_COLORS,
+  LOW_DPI_WARNING,
+  MAX_OUTLINE_MM,
+  MIN_FIGURE_HEIGHT_MM,
+  PAPER_SIZES_MM,
+  SIZE_CATEGORIES,
+} from '../lib/constants';
 import {
   cardSize,
   effectiveDpi,
-  figureImageSize,
+  figurePrintSize,
+  outlineMm,
   maxFigureHeightMm,
   prismCloses,
   prismPanelWidths,
@@ -52,6 +60,8 @@ export function Editor() {
   const editorOptions = useStore((s) => s.editor);
   const pickerAnchor = useRef<HTMLButtonElement>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const outlinePickerAnchor = useRef<HTMLButtonElement>(null);
+  const [outlinePickerOpen, setOutlinePickerOpen] = useState(false);
   /** Which piece of artwork the tabs show. Shared with the stage, which highlights it. */
   const [sideTab, setSideTab] = useState<SideKey>('front');
   const updateEditor = useStore((s) => s.updateEditor);
@@ -67,7 +77,10 @@ export function Editor() {
 
   const update = (patch: Partial<Figure>) => updateFigure(figure.id, patch);
   const maxHeight = maxFigureHeightMm(figure, settings);
-  const size = figureImageSize(figure);
+  const outline = outlineMm(figure);
+  // "Print size" is what lands on the paper, outline included; the in-game readings below stay with the
+  // artwork alone, so switching an outline on never moves a figure's size in the game world.
+  const size = figurePrintSize(figure);
   const card = cardSize(figure, settings);
   const dpi = effectiveDpi(figure);
   const others = figures.filter((f) => f.id !== figure.id);
@@ -97,7 +110,11 @@ export function Editor() {
   const stageItems: StageItem[] = stageSides.map(({ key, label, side, width, align }) => {
     const sideDims = side ? sideSize(side, figure.heightMm) : { width: 0, height: figure.heightMm };
     // A prism face may be wider than its artwork; the stage shows that room and lets it be used.
-    const faceWidthMm = Math.max(width, sideDims.width);
+    const faceWidthMm = Math.max(width, sideDims.width + 2 * outline);
+    // The two readings measure different things: what is printed, and how big the creature is. The
+    // outline belongs to the print and not to the creature, so it is in one and not the other.
+    const printHeightMm = sideDims.height + 2 * outline;
+    const gameWidthMm = faceWidthMm - 2 * outline;
     return {
       key: `${figure.id}:${key}`,
       kind: 'figure',
@@ -113,6 +130,8 @@ export function Editor() {
           heightPx={figure.heightMm * pxPerMm}
           faceWidthPx={faceWidthMm * pxPerMm}
           align={align}
+          outlinePx={outline * pxPerMm}
+          outlineColor={figure.outlineColorHex}
           showFace
           onAlign={(next) => setFaceAlign(figure.id, key, next)}
         />
@@ -123,10 +142,10 @@ export function Editor() {
           <span className="size-print">
             {/* For a prism it is the face that is printed, whether or not artwork fills it. */}
             <Measure>{formatLength(faceWidthMm, settings.unit)}</Measure> ×{' '}
-            <Measure>{formatLength(sideDims.height, settings.unit)}</Measure>
+            <Measure>{formatLength(printHeightMm, settings.unit)}</Measure>
           </span>
           <span className="size-ingame">
-            <Measure>{formatInGame(faceWidthMm, settings.categoryHeightsMm, settings.unit)}</Measure> ×{' '}
+            <Measure>{formatInGame(gameWidthMm, settings.categoryHeightsMm, settings.unit)}</Measure> ×{' '}
             <Measure>{formatInGame(sideDims.height, settings.categoryHeightsMm, settings.unit)}</Measure>
           </span>
         </>
@@ -253,6 +272,64 @@ export function Editor() {
               />
             )}
           </div>
+        </Field>
+
+        <Field
+          group
+          label={
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={figure.outline}
+                onChange={(e) => update({ outline: e.target.checked })}
+              />
+              Outline
+            </label>
+          }
+          hint={
+            figure.outline
+              ? 'Grown around the artwork, so the card gets bigger and the in-game size stays put.'
+              : 'A line around the figure, to cut along and to lift it off the table.'
+          }
+        >
+          {figure.outline && (
+            <div className="outline-controls">
+              <LengthInput
+                valueMm={figure.outlineMm}
+                unit={settings.unit}
+                minMm={0}
+                maxMm={MAX_OUTLINE_MM}
+                ariaLabel="Outline thickness"
+                compact
+                onChange={(outlineMmValue) =>
+                  update({ outlineMm: Math.min(MAX_OUTLINE_MM, Math.max(0, outlineMmValue)) })
+                }
+              />
+              <button
+                type="button"
+                ref={outlinePickerAnchor}
+                className="swatch outline-swatch"
+                title="Outline colour"
+                aria-label="Outline colour"
+                aria-haspopup="dialog"
+                aria-expanded={outlinePickerOpen}
+                style={{ background: figure.outlineColorHex }}
+                onClick={() => setOutlinePickerOpen((open) => !open)}
+              />
+              {outlinePickerOpen && (
+                <ColorPicker
+                  value={figure.outlineColorHex}
+                  anchor={outlinePickerAnchor.current}
+                  remembered={settings.customColors}
+                  onChange={(outlineColorHex) => update({ outlineColorHex })}
+                  onClose={() => {
+                    updateSettings({ customColors: rememberColor(settings.customColors, figure.outlineColorHex) });
+                    setOutlinePickerOpen(false);
+                  }}
+                />
+              )}
+            </div>
+          )}
         </Field>
 
         <h3>Artwork</h3>

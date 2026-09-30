@@ -22,6 +22,11 @@ export const LOW_DPI_WARNING = 200;
 export const MIN_FIGURE_HEIGHT_MM = 8;
 /** A face never gets narrower than this, whatever is typed into its width field. */
 export const MIN_FACE_WIDTH_MM = 5;
+/** Starting thickness of a figure's outline, in millimetres. */
+export const DEFAULT_OUTLINE_MM = 0.6;
+/** Thicker than this stops reading as an outline and starts eating the artwork's shape. */
+export const MAX_OUTLINE_MM = 3;
+export const DEFAULT_OUTLINE_COLOR = '#000000';
 /** Width of the trapezoid glue tab that closes a prism. */
 export const GLUE_TAB_MM = 8;
 /** How far each end of the glue tab tapers in, so it slides behind the opposite panel. */

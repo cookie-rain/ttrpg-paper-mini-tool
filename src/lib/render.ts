@@ -1,7 +1,17 @@
 import type { Figure, Settings, SideKey, StoredImage } from '../types';
 import { MM_PER_INCH, PAPER_SIZES_MM } from './constants';
 import { figureColorHex, readableTextColor } from './colors';
-import { figureImageSize, flapHeightMm, glueTabMm, prismBandMm, prismStrip, sideSize } from './geometry';
+import {
+  figureImageSize,
+  sideSize,
+  flapHeightMm,
+  glueTabMm,
+  outlineMm,
+  outlinedSideSize,
+  prismBandMm,
+  prismStrip,
+} from './geometry';
+import { paintOutline } from './outline';
 import { loadImageElement } from './image';
 import { applyTransform, figureImageIds, flatBack, isQuarterTurned } from './sides';
 import type { PageLayout, PlacedCard } from './layout';
@@ -58,6 +68,95 @@ export function drawSideArtwork(
   // After a quarter turn the artwork is drawn into the box with its sides swapped.
   const [w, h] = isQuarterTurned(side.transform) ? [height, width] : [width, height];
   ctx.drawImage(img, x, y, cw, ch, 0, 0, w, h);
+  ctx.restore();
+}
+
+/**
+ * Grown outlines, keyed by everything that shapes them. A figure printed in four copies, or spread over
+ * several pages, is grown once. Bounded because the key includes the thickness, and dragging that slider
+ * would otherwise leave a canvas behind at every step.
+ */
+const outlineCache = new Map<string, HTMLCanvasElement>();
+const OUTLINE_CACHE_LIMIT = 48;
+
+/** The artwork's shape, grown by `outline` millimetres and filled with `hex`, at printing resolution. */
+function grownOutline(
+  side: Figure['front'],
+  img: HTMLImageElement,
+  widthMm: number,
+  heightMm: number,
+  outline: number,
+  hex: string,
+  pxPerMm: number,
+): HTMLCanvasElement | null {
+  const radius = outline * pxPerMm;
+  const artWidth = widthMm * pxPerMm;
+  const artHeight = heightMm * pxPerMm;
+  const width = Math.max(1, Math.ceil(artWidth + 2 * radius));
+  const height = Math.max(1, Math.ceil(artHeight + 2 * radius));
+  const { crop, transform } = side;
+  const key = [
+    side.imageId,
+    crop.x,
+    crop.y,
+    crop.width,
+    crop.height,
+    transform.quarterTurns,
+    transform.flipX,
+    transform.flipY,
+    width,
+    height,
+    Math.round(radius * 100),
+    hex,
+  ].join(':');
+  const cached = outlineCache.get(key);
+  if (cached) return cached;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const octx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!octx) return null;
+  octx.imageSmoothingEnabled = true;
+  octx.imageSmoothingQuality = 'high';
+  // The artwork is drawn into the middle, leaving the outline room to grow on every side.
+  octx.translate(radius, radius);
+  drawSideArtwork(octx, side, img, artWidth, artHeight);
+  octx.setTransform(1, 0, 0, 1, 0, 0);
+  octx.putImageData(paintOutline(octx.getImageData(0, 0, width, height), radius, hex), 0, 0);
+
+  if (outlineCache.size >= OUTLINE_CACHE_LIMIT) {
+    const oldest = outlineCache.keys().next().value;
+    if (oldest !== undefined) outlineCache.delete(oldest);
+  }
+  outlineCache.set(key, canvas);
+  return canvas;
+}
+
+/**
+ * Draws one side's artwork with its outline, filling a box of (width + 2 * outline) by
+ * (height + 2 * outline) at the origin: the outline grows outwards, so the artwork keeps its size and
+ * sits inset by the thickness. The outline goes down first and the artwork covers its middle.
+ */
+export function drawOutlinedSide(
+  ctx: CanvasRenderingContext2D,
+  side: Figure['front'],
+  img: HTMLImageElement | undefined,
+  width: number,
+  height: number,
+  outline: number,
+  hex: string,
+  pxPerMm: number,
+): void {
+  if (!img) return;
+  if (outline > 0) {
+    const grown = grownOutline(side, img, width, height, outline, hex, pxPerMm);
+    // Drawn at its own pixel size so the grown edge lands on the paper exactly as it was computed.
+    if (grown) ctx.drawImage(grown, 0, 0, grown.width / pxPerMm, grown.height / pxPerMm);
+  }
+  ctx.save();
+  ctx.translate(outline, outline);
+  drawSideArtwork(ctx, side, img, width, height);
   ctx.restore();
 }
 
@@ -138,7 +237,12 @@ function drawCard(
   }
   const { width: cardWidth, height: cardHeight } = card;
   const base = settings.baseHeightMm;
-  const image = figureImageSize(figure);
+  const outline = outlineMm(figure);
+  const hex = figure.outlineColorHex;
+  // Every measurement on the card is of the artwork plus its outline: that block is what the halves,
+  // the fold and the base strips are laid out around.
+  const art = figureImageSize(figure);
+  const image = { width: art.width + 2 * outline, height: art.height + 2 * outline };
   const foldY = base + image.height;
   const frontBaseY = foldY + image.height;
   const flapY = frontBaseY + base;
@@ -153,7 +257,7 @@ function drawCard(
   // Front half, standing on the front base strip.
   ctx.save();
   ctx.translate(imageX, foldY);
-  drawSideArtwork(ctx, figure.front, decoded.get(figure.front.imageId), image.width, image.height);
+  drawOutlinedSide(ctx, figure.front, decoded.get(figure.front.imageId), art.width, art.height, outline, hex, pxPerMm);
   ctx.restore();
 
   // Back half, rotated 180°. Folding over the top turns it upright again and, seen from behind, also
@@ -161,14 +265,15 @@ function drawCard(
   // the artwork exactly as the editor shows it. Without a back the half is left blank.
   const back = flatBack(figure);
   if (back) {
-    const backSize = sideSize(back, figure.heightMm);
+    const backArt = sideSize(back, figure.heightMm);
+    const backSize = outlinedSideSize(back, figure.heightMm, outline);
     ctx.save();
     ctx.translate(cardWidth, foldY);
     ctx.scale(-1, -1);
     // Mirrored by the turn, so the offset is counted from the other end and the halves stay on top of
     // each other once the card is folded.
     ctx.translate((cardWidth - backSize.width) * (1 - align), 0);
-    drawSideArtwork(ctx, back, decoded.get(back.imageId), backSize.width, backSize.height);
+    drawOutlinedSide(ctx, back, decoded.get(back.imageId), backArt.width, backArt.height, outline, hex, pxPerMm);
     ctx.restore();
   }
 
@@ -217,7 +322,10 @@ function drawPrismCard(
   const { width: cardWidth, height: cardHeight } = card;
   const faces = prismStrip(figure, settings);
   const band = prismBandMm(settings);
+  const outline = outlineMm(figure);
   const artHeight = figure.heightMm;
+  // The band sits below the artwork and its outline, not below the artwork alone.
+  const blockHeight = artHeight + 2 * outline;
   const tab = glueTabMm(settings);
 
   ctx.fillStyle = '#ffffff';
@@ -226,15 +334,25 @@ function drawPrismCard(
   for (const face of faces) {
     if (!face.side) continue;
     const art = sideSize(face.side, artHeight);
+    const blockWidth = art.width + 2 * outline;
     ctx.save();
     // Mirroring is part of the side's own transform now, so every face is drawn the same way.
     // A face wider than its artwork keeps the spare room at the sides, split by the face's alignment.
-    ctx.translate(face.x + (face.width - art.width) * face.align, 0);
-    drawSideArtwork(ctx, face.side, decoded.get(face.side.imageId), art.width, art.height);
+    ctx.translate(face.x + (face.width - blockWidth) * face.align, 0);
+    drawOutlinedSide(
+      ctx,
+      face.side,
+      decoded.get(face.side.imageId),
+      art.width,
+      art.height,
+      outline,
+      figure.outlineColorHex,
+      pxPerMm,
+    );
     ctx.restore();
   }
 
-  if (band > 0) drawPrismBand(ctx, faces, band, artHeight, figure, card.letter, settings, pxPerMm);
+  if (band > 0) drawPrismBand(ctx, faces, band, blockHeight, figure, card.letter, settings, pxPerMm);
 
   // Folds between the faces, and one more where the glue tab bends behind the first face.
   const last = faces[faces.length - 1];

@@ -1,6 +1,6 @@
 import { useStore } from '../store';
 import { MIN_FIGURE_HEIGHT_MM, SIZE_CATEGORIES } from '../lib/constants';
-import { maxFigureHeightMm, sideSize } from '../lib/geometry';
+import { maxFigureHeightMm, outlineMm, sideSize } from '../lib/geometry';
 import { flatBack } from '../lib/sides';
 import { formatCategoryInGame, formatLength } from '../lib/units';
 import { Field, InGameInput, LengthInput, Measure, Segmented } from './controls';
@@ -49,6 +49,8 @@ export function Lineup() {
             image={images[shown.imageId]}
             alt={figure.name}
             heightPx={figure.heightMm * pxPerMm}
+            outlinePx={outlineMm(figure) * pxPerMm}
+            outlineColor={figure.outlineColorHex}
           />
         ),
         label: (

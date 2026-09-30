@@ -5,13 +5,18 @@ import { DEFAULT_SETTINGS, IN_GAME_METRES, PAPER_SIZES_MM } from './constants';
 import {
   cardSize,
   effectiveDpi,
+  faceArtworkWidthMm,
+  figureImageSize,
+  figurePrintSize,
   footerReserveMm,
   glueTabMm,
   maxFigureHeightMm,
-  prismBandMm,
-  prismPanelWidths,
+  outlineMm,
+  outlinedSideSize,
   printableArea,
+  prismBandMm,
   prismCloses,
+  prismPanelWidths,
   prismStrip,
   widestSideMm,
 } from './geometry';
@@ -47,6 +52,7 @@ import { layoutPages } from './layout';
 import { cardCutSegments, mergeCutSegments } from './cutlines';
 import { parseDecimal } from '../components/controls';
 import { formatCategoryInGame, formatInGame, inGameMetres, inGameToMm } from './units';
+import { outlineCoverage, outlineRgb, squaredDistanceField } from './outline';
 
 function footprintRect(c: { x: number; y: number; width: number; height: number; rotated: boolean }) {
   return c.rotated ? { x: c.x, y: c.y, w: c.height, h: c.width } : { x: c.x, y: c.y, w: c.width, h: c.height };
@@ -70,10 +76,172 @@ function figure(overrides: Partial<Figure> = {}): Figure {
     mirrorBack: true,
     left: null,
     heightMm: 35,
+    outline: false,
+    outlineMm: 0.6,
+    outlineColorHex: '#000000',
     faces: defaultFaces(),
     ...overrides,
   };
 }
+
+/** An alpha-only RGBA buffer, so the outline helpers can be driven from a plain bitmap. */
+function alphaOf(rows: string[]): { data: Uint8ClampedArray; width: number; height: number } {
+  const width = rows[0].length;
+  const height = rows.length;
+  const data = new Uint8ClampedArray(width * height * 4);
+  rows.forEach((row, y) => {
+    [...row].forEach((cell, x) => {
+      data[(y * width + x) * 4 + 3] = cell === '#' ? 255 : 0;
+    });
+  });
+  return { data, width, height };
+}
+
+function coverageGrid(rows: string[], radius: number): number[][] {
+  const { data, width, height } = alphaOf(rows);
+  const coverage = outlineCoverage(data, width, height, radius);
+  return Array.from({ length: height }, (_, y) => Array.from({ length: width }, (_, x) => coverage[y * width + x]));
+}
+
+describe('outline geometry', () => {
+  const plain = figure({ front: side(500, 1000), heightMm: 40 }); // 20 mm wide
+  const outlined = figure({ front: side(500, 1000), heightMm: 40, outline: true, outlineMm: 1 });
+
+  it('counts for nothing until it is switched on', () => {
+    expect(outlineMm(plain)).toBe(0);
+    expect(outlineMm({ outline: false, outlineMm: 2 })).toBe(0);
+    expect(outlineMm({ outline: true, outlineMm: 2 })).toBe(2);
+  });
+
+  it('adds its thickness on every side of the artwork', () => {
+    const art = outlinedSideSize(plain.front, 40, 0);
+    const grown = outlinedSideSize(plain.front, 40, 1);
+    expect(grown.width).toBeCloseTo(art.width + 2);
+    expect(grown.height).toBeCloseTo(art.height + 2);
+  });
+
+  it('leaves the artwork height alone, which is what the in-game size reads', () => {
+    // The figure is still 40 mm of creature; only the paper around it grew.
+    expect(outlined.heightMm).toBe(plain.heightMm);
+    expect(figureImageSize(outlined)).toEqual(figureImageSize(plain));
+  });
+
+  it('reports a print size that includes it', () => {
+    expect(figurePrintSize(plain)).toEqual(figureImageSize(plain));
+    expect(figurePrintSize(outlined).height).toBeCloseTo(42);
+    expect(figurePrintSize(outlined).width).toBeCloseTo(22);
+  });
+
+  it('grows the card by twice the thickness on each half', () => {
+    const before = cardSize(plain, DEFAULT_SETTINGS);
+    const after = cardSize(outlined, DEFAULT_SETTINGS);
+    // Two halves, each taller by the outline above the head and below the feet.
+    expect(after.height).toBeCloseTo(before.height + 4);
+    expect(after.width).toBeCloseTo(Math.max(before.width, 22));
+  });
+
+  it('widens every face of a prism, and the card with them', () => {
+    const f = figure({ shape: 'prism', front: side(400, 1000), left: side(400, 1000), back: side(400, 1000), heightMm: 40 });
+    const withOutline = { ...f, outline: true, outlineMm: 1 };
+    const widths = prismPanelWidths(withOutline, DEFAULT_SETTINGS);
+    expect(widths.front).toBeCloseTo(faceArtworkWidthMm(f, 'front') + 2);
+    expect(cardSize(withOutline, DEFAULT_SETTINGS).width).toBeCloseTo(cardSize(f, DEFAULT_SETTINGS).width + 6);
+    expect(cardSize(withOutline, DEFAULT_SETTINGS).height).toBeCloseTo(cardSize(f, DEFAULT_SETTINGS).height + 2);
+  });
+
+  it('leaves less room on the sheet, and the figure still fits', () => {
+    for (const shape of ['flat', 'prism'] as const) {
+      for (const outlineWidth of [0.5, 1, 3]) {
+        const f = figure({ shape, front: side(600, 1000), left: side(600, 1000), outline: true, outlineMm: outlineWidth });
+        const max = maxFigureHeightMm(f, DEFAULT_SETTINGS);
+        const card = cardSize({ ...f, heightMm: max }, DEFAULT_SETTINGS);
+        const area = printableArea(DEFAULT_SETTINGS);
+        const fits =
+          (card.width <= area.width + 0.05 && card.height <= area.height + 0.05) ||
+          (card.height <= area.width + 0.05 && card.width <= area.height + 0.05);
+        expect(fits, `${shape} with a ${outlineWidth} mm outline`).toBe(true);
+      }
+    }
+  });
+
+  it('allows a smaller figure than the same card without one', () => {
+    const f = figure({ front: side(600, 1000) });
+    const thick = { ...f, outline: true, outlineMm: 3 };
+    expect(maxFigureHeightMm(thick, DEFAULT_SETTINGS)).toBeLessThan(maxFigureHeightMm(f, DEFAULT_SETTINGS));
+  });
+});
+
+describe('outline distance field', () => {
+  it('measures the squared distance to the nearest set pixel', () => {
+    // One pixel set in the middle of a 5x5 field.
+    const mask = new Uint8Array(25);
+    mask[2 * 5 + 2] = 1;
+    const field = squaredDistanceField(mask, 5, 5);
+    expect(field[2 * 5 + 2]).toBe(0);
+    expect(field[2 * 5 + 3]).toBe(1);
+    expect(field[1 * 5 + 1]).toBe(2); // diagonal neighbour
+    expect(field[0 * 5 + 0]).toBe(8); // two across and two up
+  });
+
+  it('is zero everywhere when everything is set', () => {
+    const field = squaredDistanceField(new Uint8Array(9).fill(1), 3, 3);
+    expect([...field]).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  });
+});
+
+describe('outline coverage', () => {
+  // The rim is anti-aliased across the radius rather than cut off at it: a pixel whose centre sits
+  // exactly `radius` away is half covered, one half a pixel nearer is solid, one half further is empty.
+  it('is solid up to half a pixel inside the radius and empty half a pixel outside it', () => {
+    const grid = coverageGrid(['.......', '.......', '.......', '...#...', '.......', '.......', '.......'], 2);
+    expect(grid[3][3]).toBe(255); // the pixel itself
+    expect(grid[3][4]).toBe(255); // one out, comfortably inside
+    expect(grid[3][5]).toBe(128); // exactly on the radius
+    expect(grid[3][6]).toBe(0); // one past it
+  });
+
+  it('grows the same distance on a thin limb as on a thick body', () => {
+    // A block with a one-pixel arm. Scaling a copy up from the centre would give the arm a thinner edge
+    // than the body and shift it outwards; growing by distance treats both the same.
+    const rows = ['..........', '..####....', '..####.#..', '..####....', '..........'];
+    const grid = coverageGrid(rows, 2);
+    const leftOfBody = [grid[2][1], grid[2][0]];
+    const rightOfArm = [grid[2][8], grid[2][9]];
+    expect(leftOfBody).toEqual(rightOfArm);
+    expect(leftOfBody[0]).toBe(255); // one out from either edge
+    expect(grid[2][0]).toBeGreaterThan(0); // two out: still the rim, on both
+  });
+
+  it('reaches into a hole from its rim, the same way it reaches outwards', () => {
+    const rows = ['#####', '#...#', '#...#', '#...#', '#####'];
+    const grid = coverageGrid(rows, 1);
+    expect(grid[1][1]).toBeGreaterThan(0); // just inside the hole, within reach of the wall
+    expect(grid[2][2]).toBe(0); // the middle of the hole stays open
+  });
+
+  it('covers the artwork itself, since it is printed underneath', () => {
+    const grid = coverageGrid(['##', '##'], 1);
+    expect(grid.flat().every((value) => value === 255)).toBe(true);
+  });
+
+  it('feathers a rim that lands between two pixels', () => {
+    // The diagonal neighbour sits 1.41 px away, between the solid and empty bounds of a 1.5 px radius.
+    const grid = coverageGrid(['.....', '.....', '..#..', '.....', '.....'], 1.5);
+    expect(grid[1][3]).toBeGreaterThan(0);
+    expect(grid[1][3]).toBeLessThan(255);
+  });
+
+  it('draws nothing without a radius, and nothing around an empty image', () => {
+    expect(coverageGrid(['#'], 0).flat()).toEqual([0]);
+    expect(coverageGrid(['...', '...'], 3).flat().every((value) => value === 0)).toBe(true);
+  });
+
+  it('reads a colour, and falls back to black on anything else', () => {
+    expect(outlineRgb('#ff8000')).toEqual([255, 128, 0]);
+    expect(outlineRgb('000000')).toEqual([0, 0, 0]);
+    expect(outlineRgb('not a colour')).toEqual([0, 0, 0]);
+  });
+});
 
 describe('labels', () => {
   it('converts indices to letters', () => {

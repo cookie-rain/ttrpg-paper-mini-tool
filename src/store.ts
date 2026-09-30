@@ -17,6 +17,9 @@ import type {
 import {
   BASE_COLORS,
   DEFAULT_CUSTOM_COLOR,
+  DEFAULT_OUTLINE_COLOR,
+  DEFAULT_OUTLINE_MM,
+  MAX_OUTLINE_MM,
   MIN_FACE_WIDTH_MM,
   DEFAULT_FIGURE_HEIGHT_MM,
   DEFAULT_SETTINGS,
@@ -158,6 +161,9 @@ export const useStore = create<AppState>((set, get) => ({
               mirrorBack: true,
               left: null,
               heightMm: get().settings.categoryHeightsMm.medium ?? DEFAULT_FIGURE_HEIGHT_MM,
+              // Whatever the last figure was given, so a set of minis does not have to be outlined
+              // one by one. The first figure of a project starts without one.
+              ...outlineOfNewest(get().figures),
               faces: defaultFaces(),
             },
             get().settings,
@@ -435,6 +441,20 @@ interface LegacyFigure {
 }
 
 /** Repairs one figure from a project file. Returns null when it has no usable artwork. */
+/**
+ * Outline settings a newly imported figure starts with: the ones the most recently added figure carries.
+ * A set of minis is normally outlined the same way throughout, and dropping in twenty images should not
+ * mean setting it twenty times.
+ */
+function outlineOfNewest(figures: Figure[]): Pick<Figure, 'outline' | 'outlineMm' | 'outlineColorHex'> {
+  const last = figures[figures.length - 1];
+  return {
+    outline: last?.outline ?? false,
+    outlineMm: last?.outlineMm ?? DEFAULT_OUTLINE_MM,
+    outlineColorHex: last?.outlineColorHex ?? DEFAULT_OUTLINE_COLOR,
+  };
+}
+
 function normalizeFigure(raw: unknown, images: Record<string, StoredImage>): Figure | null {
   if (!raw || typeof raw !== 'object') return null;
   const figure = raw as Partial<Figure> & LegacyFigure;
@@ -459,6 +479,12 @@ function normalizeFigure(raw: unknown, images: Record<string, StoredImage>): Fig
     // Saved as `right` on this branch before the two front faces swapped names.
     left: normalizeSide(figure.left ?? figure.right, images),
     heightMm: Math.max(MIN_FIGURE_HEIGHT_MM, finite(figure.heightMm, DEFAULT_FIGURE_HEIGHT_MM)),
+    // Projects saved before outlines existed have none.
+    outline: figure.outline === true,
+    outlineMm: Math.min(MAX_OUTLINE_MM, Math.max(0, finite(figure.outlineMm, DEFAULT_OUTLINE_MM))),
+    outlineColorHex: /^#[0-9a-f]{6}$/i.test(String(figure.outlineColorHex))
+      ? String(figure.outlineColorHex)
+      : DEFAULT_OUTLINE_COLOR,
     faces: normalizeFaces(figure.faces),
   };
 }

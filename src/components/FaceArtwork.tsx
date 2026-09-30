@@ -24,6 +24,8 @@ export function FaceArtwork({
   heightPx,
   faceWidthPx,
   align,
+  outlinePx = 0,
+  outlineColor,
   showFace = false,
   onAlign,
 }: {
@@ -33,6 +35,8 @@ export function FaceArtwork({
   heightPx: number;
   faceWidthPx: number;
   align: number;
+  outlinePx?: number;
+  outlineColor?: string;
   /** Marks the face out even where the artwork fills it, so all three faces of a prism are visible. */
   showFace?: boolean;
   onAlign?: (align: number) => void;
@@ -75,7 +79,14 @@ export function FaceArtwork({
     >
       {side && (
         <div className="face-artwork-inner" style={{ left: leftPx }}>
-          <FigureImage side={side} image={image} alt={alt} heightPx={heightPx} />
+          <FigureImage
+            side={side}
+            image={image}
+            alt={alt}
+            heightPx={heightPx}
+            outlinePx={outlinePx}
+            outlineColor={outlineColor}
+          />
         </div>
       )}
     </div>

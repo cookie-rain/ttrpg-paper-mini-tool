@@ -7,14 +7,43 @@ export function sideSize(side: FigureSide, heightMm: number): { width: number; h
   return { width: heightMm * sideAspect(side), height: heightMm };
 }
 
-/** Printed image size of a figure's front artwork (one side of the fold on a flat mini). */
+/** How far a figure's outline reaches past its artwork on every side, or 0 when it has none. */
+export function outlineMm(figure: Pick<Figure, 'outline' | 'outlineMm'>): number {
+  return figure.outline ? Math.max(0, figure.outlineMm) : 0;
+}
+
+/**
+ * Printed size of one piece of artwork together with the outline around it: the room it actually takes
+ * up on the card. The outline is added around the artwork, so `heightMm` still measures the artwork on
+ * its own and the in-game size does not move when an outline is switched on -- the card grows instead.
+ */
+export function outlinedSideSize(
+  side: FigureSide,
+  heightMm: number,
+  outline: number,
+): { width: number; height: number } {
+  const art = sideSize(side, heightMm);
+  return { width: art.width + 2 * outline, height: art.height + 2 * outline };
+}
+
+/** Printed image size of a figure's front artwork (one side of the fold on a flat mini), outline aside. */
 export function figureImageSize(figure: Pick<Figure, 'front' | 'heightMm'>): { width: number; height: number } {
   return sideSize(figure.front, figure.heightMm);
 }
 
-/** Widest piece of artwork on a figure, which is what the card has to accommodate. */
-export function widestSideMm(figure: Pick<Figure, 'front' | 'back' | 'heightMm'>): number {
-  return Math.max(...figureSides(figure).map((side) => sideSize(side, figure.heightMm).width));
+/** Printed size of a figure's front as it lands on the paper, outline included. */
+export function figurePrintSize(
+  figure: Pick<Figure, 'front' | 'heightMm' | 'outline' | 'outlineMm'>,
+): { width: number; height: number } {
+  return outlinedSideSize(figure.front, figure.heightMm, outlineMm(figure));
+}
+
+/** Widest piece of artwork on a figure, outline included: what the card has to accommodate. */
+export function widestSideMm(
+  figure: Pick<Figure, 'front' | 'back' | 'heightMm' | 'outline' | 'outlineMm'>,
+): number {
+  const outline = outlineMm(figure);
+  return Math.max(...figureSides(figure).map((side) => outlinedSideSize(side, figure.heightMm, outline).width));
 }
 
 /**
@@ -41,12 +70,12 @@ export function prismBandMm(settings: Settings): number {
  * a width to stand on, and takes the main image's.
  */
 export function faceArtworkWidthMm(
-  figure: Pick<Figure, 'front' | 'back' | 'left' | 'heightMm'>,
+  figure: Pick<Figure, 'front' | 'back' | 'left' | 'heightMm' | 'outline' | 'outlineMm'>,
   key: SideKey,
 ): number {
   // A face without artwork of its own is as wide as the main image: Side B mirrors it, Side C is blank.
   const side = figure[key] ?? figure.front;
-  return sideSize(side, figure.heightMm).width;
+  return outlinedSideSize(side, figure.heightMm, outlineMm(figure)).width;
 }
 
 /**
@@ -55,7 +84,7 @@ export function faceArtworkWidthMm(
  * in the extra space according to the face's alignment.
  */
 export function prismPanelWidths(
-  figure: Pick<Figure, 'front' | 'back' | 'left' | 'heightMm' | 'faces'>,
+  figure: Pick<Figure, 'front' | 'back' | 'left' | 'heightMm' | 'faces' | 'outline' | 'outlineMm'>,
   settings: Settings,
 ): Record<SideKey, number> {
   const own = (key: SideKey) => Math.max(faceArtworkWidthMm(figure, key), figure.faces[key].widthMm ?? 0);
@@ -84,7 +113,7 @@ export function prismCloses(widths: Record<SideKey, number>): boolean {
  * Side C and closes the tube there. `side` is null for a face left blank.
  */
 export function prismStrip(
-  figure: Pick<Figure, 'front' | 'back' | 'left' | 'heightMm' | 'faces'>,
+  figure: Pick<Figure, 'front' | 'back' | 'left' | 'heightMm' | 'faces' | 'outline' | 'outlineMm'>,
   settings: Settings,
 ): { key: SideKey; x: number; width: number; align: number; side: FigureSide | null }[] {
   const widths = prismPanelWidths(figure, settings);
@@ -113,19 +142,22 @@ export function prismStrip(
  *   +-----------+
  */
 export function cardSize(
-  figure: Pick<Figure, 'shape' | 'front' | 'back' | 'left' | 'heightMm' | 'faces'>,
+  figure: Pick<Figure, 'shape' | 'front' | 'back' | 'left' | 'heightMm' | 'faces' | 'outline' | 'outlineMm'>,
   settings: Settings,
 ): { width: number; height: number } {
+  // The outline sits around the artwork on every side, so it lengthens each half of the card by twice
+  // its thickness -- above the figure's head and below its feet.
+  const outlined = figure.heightMm + 2 * outlineMm(figure);
   if (figure.shape === 'prism') {
     // One strip of three faces, closed into a triangular tube. No fold at the top, no base strip.
     const widths = prismPanelWidths(figure, settings);
     const total = widths.front + widths.left + widths.back;
-    return { width: total + glueTabMm(settings), height: figure.heightMm + prismBandMm(settings) };
+    return { width: total + glueTabMm(settings), height: outlined + prismBandMm(settings) };
   }
   return {
     // A width set by hand widens the card the same way the stand minimum does.
     width: Math.max(widestSideMm(figure), settings.minWidthMm, figure.faces.front.widthMm ?? 0),
-    height: 2 * (figure.heightMm + settings.baseHeightMm) + flapHeightMm(settings),
+    height: 2 * (outlined + settings.baseHeightMm) + flapHeightMm(settings),
   };
 }
 
@@ -151,7 +183,7 @@ export function footerReserveMm(settings: Settings): number {
  * The card width is max(imageWidth, minWidth), so both constraints are checked separately.
  */
 export function maxFigureHeightMm(
-  figure: Pick<Figure, 'shape' | 'front' | 'back' | 'left' | 'faces'>,
+  figure: Pick<Figure, 'shape' | 'front' | 'back' | 'left' | 'faces' | 'outline' | 'outlineMm'>,
   settings: Settings,
 ): number {
   const area = printableArea(settings);
@@ -161,14 +193,20 @@ export function maxFigureHeightMm(
 }
 
 /** Largest height of a flat card that fits into the given space. */
-function flatFit(figure: Pick<Figure, 'front' | 'back' | 'faces'>, settings: Settings) {
+function flatFit(
+  figure: Pick<Figure, 'front' | 'back' | 'faces' | 'outline' | 'outlineMm'>,
+  settings: Settings,
+) {
   const aspect = Math.max(...figureSides(figure).map(sideAspect));
   // Neither the stand minimum nor a width set by hand shrinks with the figure.
   const fixedWidth = Math.max(settings.minWidthMm, figure.faces.front.widthMm ?? 0);
+  // The outline is a fixed border around the artwork: it does not shrink with the height, so it comes
+  // off the space available before the rest is divided up.
+  const outline = outlineMm(figure);
   return (availWidth: number, availHeight: number) => {
     if (fixedWidth > availWidth) return 0;
-    const byHeight = (availHeight - flapHeightMm(settings)) / 2 - settings.baseHeightMm;
-    const byWidth = availWidth / aspect;
+    const byHeight = (availHeight - flapHeightMm(settings)) / 2 - settings.baseHeightMm - 2 * outline;
+    const byWidth = (availWidth - 2 * outline) / aspect;
     return Math.max(0, Math.min(byHeight, byWidth));
   };
 }
@@ -177,13 +215,16 @@ function flatFit(figure: Pick<Figure, 'front' | 'back' | 'faces'>, settings: Set
  * Largest height of a prism that fits. A width typed in by hand does not shrink with the height, so the
  * card's width is not a plain multiple of it; the largest fitting height is found by bisection instead.
  */
-function prismFit(figure: Pick<Figure, 'front' | 'back' | 'left' | 'faces'>, settings: Settings) {
+function prismFit(
+  figure: Pick<Figure, 'front' | 'back' | 'left' | 'faces' | 'outline' | 'outlineMm'>,
+  settings: Settings,
+) {
   const widthAt = (heightMm: number) => {
     const widths = prismPanelWidths({ ...figure, heightMm }, settings);
     return widths.front + widths.left + widths.back + glueTabMm(settings);
   };
   return (availWidth: number, availHeight: number) => {
-    const byHeight = availHeight - prismBandMm(settings);
+    const byHeight = availHeight - prismBandMm(settings) - 2 * outlineMm(figure);
     if (byHeight <= 0 || widthAt(0) > availWidth) return 0;
     if (widthAt(byHeight) <= availWidth) return byHeight;
     let low = 0;

@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { useStore } from '../store';
 import { figureColorHex } from '../lib/colors';
 import { sideAspect } from '../lib/sides';
+import { outlineMm } from '../lib/geometry';
 import { FigureImage } from './FigureImage';
 
 export function Sidebar() {
@@ -61,6 +62,10 @@ export function Sidebar() {
                       image={images[figure.front.imageId]}
                       alt={figure.name}
                       heightPx={Math.min(44, 44 / sideAspect(figure.front))}
+                      outlinePx={
+                        (outlineMm(figure) / figure.heightMm) * Math.min(44, 44 / sideAspect(figure.front))
+                      }
+                      outlineColor={figure.outlineColorHex}
                     />
                   </span>
                   <span className="figure-list-text">

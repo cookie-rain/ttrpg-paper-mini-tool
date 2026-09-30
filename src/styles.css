@@ -445,6 +445,17 @@ input[type='range'] {
   font-weight: 600;
 }
 
+/* Thickness and colour on one line, the picker anchored to the swatch at its end. */
+.outline-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+.swatch.outline-swatch {
+  flex: none;
+}
+
 .swatches {
   display: flex;
   /* One pixel tighter than the usual row: it is what keeps all seven on one line in a narrow column. */
