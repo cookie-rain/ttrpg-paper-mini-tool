@@ -111,6 +111,28 @@ npm run build      # type-check and build static files into dist/
 Tech stack: [Vite](https://vite.dev/), [React](https://react.dev/), TypeScript, [Zustand](https://github.com/pmndrs/zustand),
 [pdf-lib](https://pdf-lib.js.org/) and [react-image-crop](https://github.com/dominictobias/react-image-crop).
 
+### Desktop app
+
+The website continues to build and deploy to GitHub Pages on pushes to `main`.
+To also build standalone desktop apps, open **Actions → Deploy to GitHub Pages → Run workflow**
+and enable **Build standalone desktop apps for Windows, macOS, and Linux**.
+Download the `desktop-*` artifacts from the completed workflow run and extract the artifact ZIP.
+Windows gets a portable `.exe`, macOS a ZIP containing the app, and Linux an `.AppImage`
+(mark it executable before running). The workflow builds these architectures:
+Windows/Linux x64 and macOS ARM64. The apps bundle the website and run offline without a server.
+
+These builds are unsigned and the macOS app is not notarized, so operating systems may
+show security prompts or block launching them by default. Desktop projects are saved in
+the app's own storage; use project export/import to transfer work from the website.
+
+```sh
+npm run desktop:start   # build and open the desktop app locally
+npm run desktop:build   # package for your current platform into release/
+```
+
+Packaging uses [Electron](https://www.electronjs.org/) and
+[electron-builder](https://www.electron.build/v26/docs/configuration/).
+
 ### Project structure
 
 ```
