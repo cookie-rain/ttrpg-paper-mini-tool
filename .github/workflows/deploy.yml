@@ -6,11 +6,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      build_desktop:
-        description: Build standalone desktop apps for Windows, macOS, and Linux
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -42,38 +37,3 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/deploy-pages@v5
-
-  desktop:
-    if: github.event_name == 'workflow_dispatch' && inputs.build_desktop
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            arch: x64
-          - os: macos-latest
-            arch: arm64
-          - os: ubuntu-latest
-            arch: x64
-    runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm test
-      - run: npm run desktop:build -- --${{ matrix.arch }}
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - uses: actions/upload-artifact@v4
-        with:
-          name: desktop-${{ matrix.os }}
-          path: |
-            release/*.exe
-            release/*.zip
-            release/*.AppImage
-          if-no-files-found: error
