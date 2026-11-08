@@ -30,13 +30,17 @@ jobs:
       - run: npm run desktop:build -- --${{ matrix.arch }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          # Behebt den 504 Gateway Timeout Fehler bei langsamen GitHub-Downloads:
+          ELECTRON_BUILDER_CONNECT_TIMEOUT: "300000"
+          ELECTRON_BUILDER_HTTP_TIMEOUT: "300000"
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.os }}
+          # Pfade angepasst auf '**/' damit GitHub die Dateien in den Unterordnern findet:
           path: |
-            release/*.exe
-            release/*.zip
-            release/*.AppImage
+            **/release/*.exe
+            **/release/*.zip
+            **/release/*.AppImage
           if-no-files-found: error
 
   release:
