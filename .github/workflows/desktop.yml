@@ -1,0 +1,80 @@
+name: Build Electron desktop apps
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            arch: x64
+          - os: macos-latest
+            arch: arm64
+          - os: ubuntu-latest
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run desktop:build -- --${{ matrix.arch }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: |
+            release/*.exe
+            release/*.zip
+            release/*.AppImage
+          if-no-files-found: error
+
+  release:
+    needs: desktop
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: release-assets
+          merge-multiple: true
+      - name: Publish desktop release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          tag="desktop-v${version}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          title="Desktop v${version} (build ${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT})"
+          cat > release-notes.md <<EOF
+          Standalone desktop builds from commit ${GITHUB_SHA}.
+
+          - Windows x64: portable .exe
+          - macOS ARM64: extract the .zip to get the app
+          - Linux x64: mark the .AppImage executable before running
+
+          These builds are unsigned; the macOS app is not notarized.
+          EOF
+          gh release create "$tag" release-assets/* \
+            --target "$GITHUB_SHA" \
+            --title "$title" \
+            --notes-file release-notes.md \
+            --draft
+          gh release edit "$tag" --draft=false --latest

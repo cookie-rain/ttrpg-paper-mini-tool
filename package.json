@@ -10,7 +10,9 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "desktop:start": "npm run build && electron .",
+    "desktop:build": "npm run build && electron-builder --publish never"
   },
   "dependencies": {
     "idb-keyval": "^6.3.0",
@@ -24,8 +26,11 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.0",
     "vitest": "^5.0.0"
-  }
+  },
+  "main": "electron/main.cjs"
 }

@@ -1,0 +1,15 @@
+appId: com.ttrpg.paper-mini-tool
+productName: TTRPG Paper-Mini Tool
+directories:
+  output: release
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+win:
+  target: portable
+mac:
+  target: zip
+linux:
+  target: AppImage
+  category: Graphics
