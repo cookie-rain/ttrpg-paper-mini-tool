@@ -31,6 +31,7 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           # Behebt den 504 Gateway Timeout Fehler bei langsamen GitHub-Downloads:
+          NODE_OPTIONS: "--max-http-header-size=81920"
           ELECTRON_BUILDER_CONNECT_TIMEOUT: "300000"
           ELECTRON_BUILDER_HTTP_TIMEOUT: "300000"
       - uses: actions/upload-artifact@v4
