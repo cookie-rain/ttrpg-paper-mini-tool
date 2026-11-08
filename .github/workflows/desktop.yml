@@ -77,7 +77,14 @@ jobs:
 
           These builds are unsigned; the macOS app is not notarized.
           EOF
-          gh release create "$tag" release-assets/* \
+          # Artifacts keep their release/ folder, so collect the files recursively.
+          mapfile -t assets < <(find release-assets -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.AppImage' \) | sort)
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "No desktop builds found under release-assets" >&2
+            find release-assets >&2
+            exit 1
+          fi
+          gh release create "$tag" "${assets[@]}" \
             --target "$GITHUB_SHA" \
             --title "$title" \
             --notes-file release-notes.md \
