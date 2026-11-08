@@ -1,12 +1,35 @@
 # 🧙 TTRPG Paper-Mini Tool
 
 Turn character and monster images into printable, foldable **paper miniatures** for tabletop RPGs —
-right in your browser. Works for Daggerheart, D&D, Pathfinder or any other game played on a 1-inch grid.
+in your browser or as a desktop app for Windows, macOS and Linux. Works for Daggerheart, D&D, Pathfinder
+or any other game played on a 1-inch grid.
 
 Print them **flat** for plastic stands or a folded paper foot, or **triangular** as a small tube that
 stands on its own and shows the figure from the front, both front corners and the back.
 
-Your images never leave your computer: everything runs locally in the browser.
+Your images never leave your computer: everything runs locally, in the browser or in the desktop app.
+
+## Use it
+
+**In the browser:** open <https://cookie-rain.github.io/ttrpg-paper-mini-tool/>. Nothing to install,
+and your projects are saved in the browser.
+
+**As a desktop app:** download the latest build from the
+[Releases](https://github.com/cookie-rain/ttrpg-paper-mini-tool/releases/latest) page. It is the same tool
+bundled with [Electron](https://www.electronjs.org/), runs offline and needs no browser.
+
+| Platform | Download | Notes |
+| --- | --- | --- |
+| Windows (x64) | `TTRPG.Paper-Mini.Tool.<version>.exe` | Portable: no installer, just run it. |
+| macOS (Apple Silicon) | `TTRPG.Paper-Mini.Tool-<version>-arm64-mac.zip` | Unzip and move the app to *Applications*. |
+| Linux (x64) | `TTRPG.Paper-Mini.Tool-<version>.AppImage` | Mark it executable (`chmod +x`), then run it. |
+
+The builds are unsigned and the macOS app is not notarized, so the first launch may trigger a security
+prompt. On Windows choose *More info → Run anyway*; on macOS right-click the app and choose *Open*, or
+allow it under *System Settings → Privacy & Security*.
+
+The desktop app keeps its own projects, separate from the website. To move work between the two, export
+the project as a file on one side and import it on the other.
 
 ## Screenshots
 
@@ -89,7 +112,8 @@ No glue at hand? Switch the tab off and close the tube with a piece of tape.
   and figure sizes, which printing straight from the browser cannot promise: its dialog may scale the
   sheet, and a mini printed at 97 % is simply the wrong size.
 - **mm or inches** throughout.
-- **Projects** are saved automatically in the browser and can be exported/imported as a file.
+- **Projects** are saved automatically (in the browser or in the desktop app) and can be exported/imported
+  as a file — also to move them between the website and the desktop app.
 
 ## Tips
 
@@ -113,30 +137,21 @@ Tech stack: [Vite](https://vite.dev/), [React](https://react.dev/), TypeScript, 
 
 ### Desktop app
 
-The website continues to build and deploy to GitHub Pages on pushes to `main`.
-To build and release standalone desktop apps independently, open
-**Actions → Build Electron desktop apps → Run workflow**.
-After all three platform builds succeed, the workflow automatically publishes a GitHub release
-with the desktop downloads attached. Find them on the repository's **Releases** page.
-Each run gets a unique tag, `desktop-v<package-version>-<run-id>-<attempt>`, pointing to
-the commit that was built. Rerunning the workflow creates a new release rather than overwriting one.
-The release job uses GitHub's built-in token; no additional secret is required.
-The `desktop-*` workflow artifacts also remain available as ZIP downloads.
-Windows gets a portable `.exe`, macOS a ZIP containing the app, and Linux an `.AppImage`
-(mark it executable before running). The workflow builds these architectures:
-Windows/Linux x64 and macOS ARM64. The apps bundle the website and run offline without a server.
-
-These builds are unsigned and the macOS app is not notarized, so operating systems may
-show security prompts or block launching them by default. Desktop projects are saved in
-the app's own storage; use project export/import to transfer work from the website.
+The desktop app is the built website wrapped in [Electron](https://www.electronjs.org/); the window is set
+up in `electron/main.cjs` and packaging is configured in `electron-builder.yml` via
+[electron-builder](https://www.electron.build/v26/docs/configuration/).
 
 ```sh
 npm run desktop:start   # build and open the desktop app locally
 npm run desktop:build   # package for your current platform into release/
 ```
 
-Packaging uses [Electron](https://www.electronjs.org/) and
-[electron-builder](https://www.electron.build/v26/docs/configuration/).
+Pushes to `main` build and deploy the website to GitHub Pages. Desktop releases are made separately:
+open **Actions → Build Electron desktop apps → Run workflow**. It builds Windows x64, macOS ARM64 and
+Linux x64, then publishes a GitHub release with the three downloads attached. Each run gets its own tag,
+`desktop-v<package-version>-<run-id>-<attempt>`, pointing at the commit that was built, so rerunning
+creates a new release rather than overwriting one. The job uses GitHub's built-in token; no extra secret
+is needed. The builds are not code-signed.
 
 ### Project structure
 
